@@ -121,6 +121,7 @@ void prandom_seed_full_state(struct rnd_state __percpu *pcpu_state)
 		prandom_warmup(state);
 	}
 }
+EXPORT_SYMBOL(prandom_seed_full_state);
 
 #ifdef CONFIG_RANDOM32_SELFTEST
 static struct prandom_test1 {
