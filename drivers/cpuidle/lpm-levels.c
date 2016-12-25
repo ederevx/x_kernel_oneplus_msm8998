@@ -474,7 +474,7 @@ static uint64_t get_cluster_sleep_time(struct lpm_cluster *cluster,
 	ktime_t next_event;
 	struct cpumask online_cpus_in_cluster;
 
-	next_event.tv64 = KTIME_MAX;
+	next_event = KTIME_MAX;
 	if (!suspend_wake_time)
 		suspend_wake_time =  msm_pm_sleep_time_override;
 	if (!from_idle) {
@@ -493,8 +493,8 @@ static uint64_t get_cluster_sleep_time(struct lpm_cluster *cluster,
 		ktime_t *next_event_c;
 
 		next_event_c = get_next_event_cpu(cpu);
-		if (next_event_c->tv64 < next_event.tv64) {
-			next_event.tv64 = next_event_c->tv64;
+		if (*next_event_c < next_event) {
+			next_event = *next_event_c;
 			next_cpu = cpu;
 		}
 	}
