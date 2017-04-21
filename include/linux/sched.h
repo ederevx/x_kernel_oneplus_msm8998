@@ -2571,7 +2571,7 @@ static inline void sched_clock_idle_sleep_event(void)
 {
 }
 
-static inline void sched_clock_idle_wakeup_event(u64 delta_ns)
+static inline void sched_clock_idle_wakeup_event(void)
 {
 }
 
@@ -2598,7 +2598,7 @@ extern u64 __sched_clock_offset;
 extern void sched_clock_tick(void);
 extern void sched_clock_tick_stable(void);
 extern void sched_clock_idle_sleep_event(void);
-extern void sched_clock_idle_wakeup_event(u64 delta_ns);
+extern void sched_clock_idle_wakeup_event(void);
 
 /*
  * As outlined in clock.c, provides a fast, high resolution, nanosecond
@@ -2645,7 +2645,7 @@ extern void sched_exec(void);
 #endif
 
 extern void sched_clock_idle_sleep_event(void);
-extern void sched_clock_idle_wakeup_event(u64 delta_ns);
+extern void sched_clock_idle_wakeup_event(void);
 
 #ifdef CONFIG_HOTPLUG_CPU
 extern void idle_task_exit(void);
