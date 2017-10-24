@@ -8463,6 +8463,9 @@ static void update_blocked_averages(int cpu)
 	}
 
 	update_rt_rq_load_avg(rq_clock_task(rq), cpu, &rq->rt, 0);
+#ifdef CONFIG_NO_HZ_COMMON
+	rq->last_blocked_load_update_tick = jiffies;
+#endif
 	rq_unlock_irqrestore(rq, &rf);
 }
 
@@ -8523,6 +8526,9 @@ static inline void update_blocked_averages(int cpu)
 	update_rq_clock(rq);
 	update_cfs_rq_load_avg(cfs_rq_clock_task(cfs_rq), cfs_rq, true);
 	update_rt_rq_load_avg(rq_clock_task(rq), cpu, &rq->rt, 0);
+#ifdef CONFIG_NO_HZ_COMMON
+	rq->last_blocked_load_update_tick = jiffies;
+#endif
 	rq_unlock_irqrestore(rq, &rf);
 }
 
@@ -9125,6 +9131,30 @@ static inline void update_sd_lb_stats(struct lb_env *env, struct sd_lb_stats *sd
 	int load_idx;
 	bool overload = false, overutilized = false;
 	bool prefer_sibling = child && child->flags & SD_PREFER_SIBLING;
+
+#ifdef CONFIG_NO_HZ_COMMON
+	if (env->idle == CPU_NEWLY_IDLE) {
+		int cpu;
+
+		/* Update the stats of NOHZ idle CPUs in the sd */
+		for_each_cpu_and(cpu, sched_domain_span(env->sd),
+				 nohz.idle_cpus_mask) {
+			struct rq *rq = cpu_rq(cpu);
+
+			/* ... Unless we've already done since the last tick */
+			if (time_after(jiffies,
+                                       rq->last_blocked_load_update_tick))
+				update_blocked_averages(cpu);
+		}
+	}
+	/*
+	 * If we've just updated all of the NOHZ idle CPUs, then we can push
+	 * back the next nohz.next_update, which will prevent an unnecessary
+	 * wakeup for the nohz stats kick
+	 */
+	if (cpumask_subset(nohz.idle_cpus_mask, sched_domain_span(env->sd)))
+		nohz.next_update = jiffies + LOAD_AVG_PERIOD;
+#endif
 
 	load_idx = get_sd_load_idx(env->sd, env->idle);
 
@@ -10787,10 +10817,12 @@ static void run_rebalance_domains(struct softirq_action *h)
 	 */
 	nohz_idle_balance(this_rq, idle);
 	update_blocked_averages(this_rq->cpu);
+#ifdef CONFIG_NO_HZ_COMMON
 	if (!test_bit(NOHZ_STATS_KICK, nohz_flags(this_rq->cpu)))
 		rebalance_domains(this_rq, idle);
-#ifdef CONFIG_NO_HZ_COMMON
 	clear_bit(NOHZ_STATS_KICK, nohz_flags(this_rq->cpu));
+#else
+	rebalance_domains(this_rq, idle);
 #endif
 }
 
