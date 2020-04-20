@@ -22,9 +22,9 @@
 #ifndef _FLICKER_FREE_H
 #define _FLICKER_FREE_H
 
-#define MAX_SCALE 32768 /* Maximum value of RGB possible */
+#define FF_MAX_SCALE 32768 /* Maximum value of RGB possible */
 
-#define MIN_SCALE 5120 /* Minimum value of RGB recommended */
+#define FF_MIN_SCALE 5120 /* Minimum value of RGB recommended */
 
 #define RET_WORKGROUND
 #define RET_WORKGROUND_DELAY 200

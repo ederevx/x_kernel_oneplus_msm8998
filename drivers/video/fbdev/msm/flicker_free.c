@@ -80,7 +80,7 @@ static int flicker_free_push_dither(int depth)
 
 static int flicker_free_push_pcc(int temp)
 {
-	pcc_config.ops = mdss_backlight_enable ?
+	pcc_config.ops = pcc_enabled ? 
 		MDP_PP_OPS_WRITE | MDP_PP_OPS_ENABLE :
 			MDP_PP_OPS_WRITE | MDP_PP_OPS_DISABLE;
 	pcc_config.r.r = temp;
@@ -91,14 +91,14 @@ static int flicker_free_push_pcc(int temp)
 	payload->b.b = pcc_config.b.b;
 	pcc_config.cfg_payload = payload;
 	
-	return mdss_mdp_pcc_config(get_mfd_copy(), &pcc_config, &copyback);
+	return mdss_mdp_kernel_pcc_config(get_mfd_copy(), &pcc_config, &copyback);
 }
 
 static int set_brightness(int backlight)
 {
-	int temp = 0;
+	uint32_t temp = 0;
 	backlight = clamp_t(int, ((backlight-1)*(BACKLIGHT_INDEX-1)/(elvss_off_threshold-1)+1), 1, BACKLIGHT_INDEX);
-	temp = clamp_t(int, 0x80*bkl_to_pcc[backlight - 1], MIN_SCALE, MAX_SCALE);
+	temp = clamp_t(int, 0x80*bkl_to_pcc[backlight - 1], FF_MIN_SCALE, FF_MAX_SCALE);
 	for (depth = 8;depth >= 1;depth--){
 		if(temp >= pcc_depth[depth]) break;
 	}
