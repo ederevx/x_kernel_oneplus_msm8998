@@ -27,6 +27,10 @@
 #include "mdss_dba_utils.h"
 #include "mdss_debug.h"
 
+#ifdef CONFIG_FLICKER_FREE
+#include "flicker_free.h"
+#endif
+
 #include <linux/clk.h>
 #include <linux/project_info.h>
 #if defined(CONFIG_IRIS2P_FULL_SUPPORT)
@@ -1057,6 +1061,12 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
+
+#ifdef CONFIG_FLICKER_FREE
+	/* Remap backlight value prior to HBM */
+	if (bl_level != 0)
+		bl_level = mdss_panel_calc_backlight(bl_level);
+#endif
 
 	if (ctrl_pdata->high_brightness_panel){
 		pr_debug("%s goto backlight level remap\n", __func__);
