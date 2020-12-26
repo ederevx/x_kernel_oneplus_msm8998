@@ -633,7 +633,7 @@ static int cpu_clk_8996_pre_set_rate(struct clk *c, unsigned long rate)
 	 */
 	if (hw_low_power_ctrl) {
 		memset(&cpuclk->req, 0, sizeof(cpuclk->req));
-		cpuclk->req.cpus_affine = cpuclk->cpumask;
+		atomic_set(&cpuclk->req.cpus_affine, *cpumask_bits(cpuclk->cpumask));
 		cpuclk->req.type = PM_QOS_REQ_AFFINE_CORES;
 		pm_qos_add_request(&cpuclk->req, PM_QOS_CPU_DMA_LATENCY,
 				   cpuclk->pm_qos_latency);
