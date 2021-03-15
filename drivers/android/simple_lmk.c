@@ -30,7 +30,7 @@ struct victim_info {
 
 static struct victim_info victims[MAX_VICTIMS] __cacheline_aligned_in_smp;
 static struct task_struct *task_bucket[SHRT_MAX + 1] __cacheline_aligned;
-static DECLARE_WAIT_QUEUE_HEAD(oom_waitq);
+static struct task_struct *oom_thread;
 static DECLARE_COMPLETION(reclaim_done);
 static __cacheline_aligned_in_smp DEFINE_RWLOCK(mm_free_lock);
 static int nr_victims;
@@ -275,7 +275,12 @@ static int simple_lmk_reclaim_thread(void *data)
 	sched_setscheduler_nocheck(current, SCHED_FIFO, &sched_max_rt_prio);
 
 	while (1) {
-		wait_event(oom_waitq, atomic_read(&needs_reclaim));
+		do {
+			set_current_state(TASK_IDLE);
+			schedule();
+			set_current_state(TASK_RUNNING);
+		} while (unlikely(!atomic_read(&needs_reclaim)));
+
 		scan_and_kill();
 		atomic_set_release(&needs_reclaim, 0);
 	}
@@ -306,7 +311,7 @@ static int simple_lmk_vmpressure_cb(struct notifier_block *nb,
 				    unsigned long pressure, void *data)
 {
 	if (pressure == 100 && !atomic_cmpxchg_acquire(&needs_reclaim, 0, 1))
-		wake_up(&oom_waitq);
+		wake_up_process(oom_thread);
 
 	return NOTIFY_OK;
 }
@@ -320,12 +325,11 @@ static struct notifier_block vmpressure_notif = {
 static int simple_lmk_init_set(const char *val, const struct kernel_param *kp)
 {
 	static atomic_t init_done = ATOMIC_INIT(0);
-	struct task_struct *thread;
 
 	if (!atomic_cmpxchg(&init_done, 0, 1)) {
-		thread = kthread_run_perf_critical(simple_lmk_reclaim_thread,
+		oom_thread = kthread_run_perf_critical(simple_lmk_reclaim_thread,
 						   NULL, "simple_lmkd");
-		BUG_ON(IS_ERR(thread));
+		BUG_ON(IS_ERR(oom_thread));
 		BUG_ON(vmpressure_notifier_register(&vmpressure_notif));
 	}
 
