@@ -185,7 +185,26 @@ static unsigned int dev_num = 1;
 static struct cdev wlan_hdd_state_cdev;
 static struct class *class;
 static dev_t device;
-static bool hdd_loaded = false;
+static bool hdd_loaded __read_mostly = false;
+
+static struct gwlan_loader *wlan_loader;
+static ssize_t wlan_boot_cb(struct kobject *kobj,
+			    struct kobj_attribute *attr,
+			    const char *buf, size_t count);
+struct gwlan_loader {
+	bool loaded_state;
+	struct kobject *boot_wlan_obj;
+	struct attribute_group *attr_group;
+};
+
+static struct kobj_attribute wlan_boot_attribute =
+	__ATTR(boot_wlan, 0220, NULL, wlan_boot_cb);
+
+static struct attribute *attrs[] = {
+	&wlan_boot_attribute.attr,
+	NULL,
+};
+#define MODULE_INITIALIZED 1
 
 #define HDD_OPS_INACTIVITY_TIMEOUT (120000)
 #define MAX_OPS_NAME_STRING_SIZE 20
@@ -14164,6 +14183,8 @@ static void hdd_inform_wifi_off(void)
 }
 
 static int hdd_driver_load(void);
+static int wlan_deinit_sysfs(void);
+
 static ssize_t wlan_hdd_state_ctrl_param_write(struct file *filp,
 						const char __user *user_buf,
 						size_t count,
@@ -14200,6 +14221,18 @@ static ssize_t wlan_hdd_state_ctrl_param_write(struct file *filp,
 			pr_err("%s: Failed to init hdd module\n", __func__);
 			goto exit;
 		}
+
+		/* 
+		 * Systems with Wi-Fi HAL which recognize HDD as module write to /dev/wlan directly 
+		 * without invoking wlan_boot sysfs. Furthermore, if it does not have the module, 
+		 * the system needs to wait for the callback to occur before it is able to write 
+		 * to /dev/wlan since it is only then the directory is initialized based 
+		 * on QCOM's unmodified non-module code.
+		 *
+		 * Thus, it is safe to deinit sysfs if the write to /dev occurs first instead
+		 * of sysfs being invoked first.
+		 */
+		wlan_deinit_sysfs();
 	}
 
 	if (!cds_is_driver_loaded() || cds_is_driver_recovering()) {
@@ -14531,33 +14564,147 @@ static void hdd_driver_unload(void)
 }
 
 /**
- * hdd_module_init() - Module init helper
+ * wlan_boot_cb() - Wlan boot callback
+ * @kobj:      object whose directory we're creating the link in.
+ * @attr:      attribute the user is interacting with
+ * @buff:      the buffer containing the user data
+ * @count:     number of bytes in the buffer
  *
- * Module init helper function used by both module and static driver.
+ * This callback is invoked when the fs is ready to start the
+ * wlan driver initialization.
+ *
+ * Return: 'count' on success or a negative error code in case of failure
+ */
+static ssize_t wlan_boot_cb(struct kobject *kobj,
+			    struct kobj_attribute *attr,
+			    const char *buf,
+			    size_t count)
+{
+
+	if (wlan_loader->loaded_state || hdd_loaded) {
+		hdd_fln("wlan driver already initialized");
+		return -EALREADY;
+	}
+
+	if (hdd_driver_load())
+		return -EIO;
+
+	wlan_loader->loaded_state = MODULE_INITIALIZED;
+
+	return count;
+}
+
+/**
+ * hdd_sysfs_cleanup() - cleanup sysfs
+ *
+ * Return: None
+ *
+ */
+static void hdd_sysfs_cleanup(void)
+{
+	/* remove from group */
+	if (wlan_loader->boot_wlan_obj && wlan_loader->attr_group)
+		sysfs_remove_group(wlan_loader->boot_wlan_obj,
+				   wlan_loader->attr_group);
+
+	/* unlink the object from parent */
+	kobject_del(wlan_loader->boot_wlan_obj);
+
+	/* free the object */
+	kobject_put(wlan_loader->boot_wlan_obj);
+
+	kfree(wlan_loader->attr_group);
+	kfree(wlan_loader);
+
+	wlan_loader = NULL;
+}
+
+/**
+ * wlan_init_sysfs() - Creates the sysfs to be invoked when the fs is
+ * ready
+ *
+ * This is creates the syfs entry boot_wlan. Which shall be invoked
+ * when the filesystem is ready.
+ *
+ * QDF API cannot be used here since this function is called even before
+ * initializing WLAN driver.
  *
  * Return: 0 for success, errno on failure
  */
-static int hdd_module_init(void)
+static int wlan_init_sysfs(void)
 {
-	int ret;
+	int ret = -ENOMEM;
 
-	ret = wlan_hdd_state_ctrl_param_create();
-	if (ret)
-		pr_err("wlan_hdd_state_create: %x\n", ret);
+	wlan_loader = kzalloc(sizeof(*wlan_loader), GFP_KERNEL);
+	if (!wlan_loader)
+		return -ENOMEM;
+
+	wlan_loader->boot_wlan_obj = NULL;
+	wlan_loader->attr_group = kzalloc(sizeof(*(wlan_loader->attr_group)),
+					  GFP_KERNEL);
+	if (!wlan_loader->attr_group)
+		goto error_return;
+
+	wlan_loader->loaded_state = 0;
+	wlan_loader->attr_group->attrs = attrs;
+
+	wlan_loader->boot_wlan_obj = kobject_create_and_add("boot_wlan",
+							    kernel_kobj);
+	if (!wlan_loader->boot_wlan_obj) {
+		hdd_fln("sysfs create and add failed");
+		goto error_return;
+	}
+
+	ret = sysfs_create_group(wlan_loader->boot_wlan_obj,
+				 wlan_loader->attr_group);
+	if (ret) {
+		hdd_fln("sysfs create group failed; errno:%d", ret);
+		goto error_return;
+	}
+
+	return 0;
+
+error_return:
+	hdd_sysfs_cleanup();
 
 	return ret;
 }
 
 /**
- * hdd_module_exit() - Exit function
+ * wlan_deinit_sysfs() - Removes the sysfs created to initialize the wlan
  *
- * This is the driver exit point (invoked when module is unloaded using rmmod)
- *
- * Return: None
+ * Return: 0 on success or errno on failure
  */
+static int wlan_deinit_sysfs(void)
+{
+	if (!wlan_loader) {
+		hdd_fln("wlan loader context is Null!");
+		return -EINVAL;
+	}
+
+	hdd_sysfs_cleanup();
+	return 0;
+}
+
+static int __init hdd_module_init(void)
+{
+	int ret = -EINVAL;
+
+	ret = wlan_hdd_state_ctrl_param_create();
+	if (ret)
+		pr_err("wlan_hdd_state_create:%x\n", ret);
+
+	ret = wlan_init_sysfs();
+	if (ret)
+		hdd_fln("Failed to create sysfs entry");
+
+	return ret;
+}
+
 static void __exit hdd_module_exit(void)
 {
 	hdd_driver_unload();
+	wlan_deinit_sysfs();
 }
 
 #undef hdd_fln
