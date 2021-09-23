@@ -140,25 +140,6 @@ struct ipa_mhi_client_ctx {
 
 static struct ipa_mhi_client_ctx *ipa_mhi_client_ctx;
 
-#ifdef CONFIG_DEBUG_FS
-#define IPA_MHI_MAX_MSG_LEN 512
-static char dbg_buff[IPA_MHI_MAX_MSG_LEN];
-static struct dentry *dent;
-
-static char *ipa_mhi_channel_state_str[] = {
-	__stringify(IPA_HW_MHI_CHANNEL_STATE_DISABLE),
-	__stringify(IPA_HW_MHI_CHANNEL_STATE_ENABLE),
-	__stringify(IPA_HW_MHI_CHANNEL_STATE_RUN),
-	__stringify(IPA_HW_MHI_CHANNEL_STATE_SUSPEND),
-	__stringify(IPA_HW_MHI_CHANNEL_STATE_STOP),
-	__stringify(IPA_HW_MHI_CHANNEL_STATE_ERROR),
-};
-
-#define MHI_CH_STATE_STR(state) \
-	(((state) >= 0 && (state) <= IPA_HW_MHI_CHANNEL_STATE_ERROR) ? \
-	ipa_mhi_channel_state_str[(state)] : \
-	"INVALID")
-
 static int ipa_mhi_read_write_host(enum ipa_mhi_dma_dir dir, void *dev_addr,
 	u64 host_addr, int size)
 {
@@ -232,6 +213,25 @@ fail_memcopy:
 			mem.phys_base);
 	return res;
 }
+
+#ifdef CONFIG_DEBUG_FS
+#define IPA_MHI_MAX_MSG_LEN 512
+static char dbg_buff[IPA_MHI_MAX_MSG_LEN];
+static struct dentry *dent;
+
+static char *ipa_mhi_channel_state_str[] = {
+	__stringify(IPA_HW_MHI_CHANNEL_STATE_DISABLE),
+	__stringify(IPA_HW_MHI_CHANNEL_STATE_ENABLE),
+	__stringify(IPA_HW_MHI_CHANNEL_STATE_RUN),
+	__stringify(IPA_HW_MHI_CHANNEL_STATE_SUSPEND),
+	__stringify(IPA_HW_MHI_CHANNEL_STATE_STOP),
+	__stringify(IPA_HW_MHI_CHANNEL_STATE_ERROR),
+};
+
+#define MHI_CH_STATE_STR(state) \
+	(((state) >= 0 && (state) <= IPA_HW_MHI_CHANNEL_STATE_ERROR) ? \
+	ipa_mhi_channel_state_str[(state)] : \
+	"INVALID")
 
 static int ipa_mhi_print_channel_info(struct ipa_mhi_channel_ctx *channel,
 	char *buff, int len)
@@ -2314,10 +2314,12 @@ int ipa_mhi_destroy_all_channels(void)
 	return 0;
 }
 
+#ifdef CONFIG_DEBUG_FS
 static void ipa_mhi_debugfs_destroy(void)
 {
 	debugfs_remove_recursive(dent);
 }
+#endif
 
 /**
  * ipa_mhi_destroy() - Destroy MHI IPA
