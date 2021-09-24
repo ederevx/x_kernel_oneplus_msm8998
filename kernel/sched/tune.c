@@ -391,6 +391,17 @@ schedtune_tasks_update(struct task_struct *p, int cpu, int idx, int task_count)
 			bg->group[idx].ts);
 }
 
+static inline bool
+schedtune_set_enqueued(struct task_struct *p, bool state)
+{
+	/* Task has already de/enqueued, no need to change */
+	if (state == p->schedtune_enqueued)
+		return false;
+
+	p->schedtune_enqueued = state;
+	return true;
+}
+
 /*
  * NOTE: This function must be called while holding the lock on the CPU RQ
  */
@@ -411,6 +422,9 @@ void schedtune_enqueue_task(struct task_struct *p, int cpu)
 	 * CPU boosting while the task is exiting.
 	 */
 	if (p->flags & PF_EXITING)
+		return;
+
+	if (!schedtune_set_enqueued(p, true))
 		return;
 
 	/*
@@ -449,6 +463,8 @@ int schedtune_can_attach(struct cgroup_taskset *tset)
 	int dst_bg; /* Destination boost group index */
 	int tasks;
 	u64 now;
+	bool boosted;
+	bool enqueued;
 
 	if (!unlikely(schedtune_initialized))
 		return 0;
@@ -478,11 +494,18 @@ int schedtune_can_attach(struct cgroup_taskset *tset)
 		dst_bg = css_st(css)->idx;
 		src_bg = task_schedtune(task)->idx;
 
+		boosted = !!bg->group[dst_bg].boost;
+		enqueued = schedtune_set_enqueued(task, boosted) ? !boosted : boosted;
+
 		/*
 		 * Current task is not changing boostgroup, which can
 		 * happen when the new hierarchy is in use.
+		 * 
+		 * Another scenario is that there are no changes to be 
+		 * made to the boost groups due to lack of boost value, wherein 
+		 * it is unnecessary to go past this point.
 		 */
-		if (unlikely(dst_bg == src_bg)) {
+		if (unlikely(dst_bg == src_bg) || !(enqueued || boosted)) {
 			raw_spin_unlock(&bg->lock);
 			unlock_rq_of(rq, task, &rf);
 			continue;
@@ -494,9 +517,14 @@ int schedtune_can_attach(struct cgroup_taskset *tset)
 		 */
 
 		/* Move task from src to dst boost group */
-		tasks = bg->group[src_bg].tasks - 1;
-		bg->group[src_bg].tasks = max(0, tasks);
-		bg->group[dst_bg].tasks += 1;
+		if (enqueued) {
+			tasks = bg->group[src_bg].tasks - 1;
+			bg->group[src_bg].tasks = max(0, tasks);
+		}
+
+		/* Only enqueue if the group is boosted */
+		if (boosted)
+			bg->group[dst_bg].tasks += 1;
 
 		/* Update boost hold start for this group */
 		now = sched_clock_cpu(cpu);
@@ -545,6 +573,9 @@ void schedtune_dequeue_task(struct task_struct *p, int cpu)
 	if (p->flags & PF_EXITING)
 		return;
 
+	if (!schedtune_set_enqueued(p, false))
+		return;
+
 	/*
 	 * Boost group accouting is protected by a per-cpu lock and requires
 	 * interrupt to be disabled to avoid race conditions on...
@@ -570,6 +601,9 @@ void schedtune_exit_task(struct task_struct *tsk)
 	int idx;
 
 	if (!unlikely(schedtune_initialized))
+		return;
+
+	if (!schedtune_set_enqueued(tsk, false))
 		return;
 
 	rq = lock_rq_of(tsk, &rf);
