@@ -48,6 +48,8 @@ int sched_boost_handler(struct ctl_table *table, int write,
 	if (ret || !write)
 		goto done;
 
+	if (verify_boost_params(old_val, *data))
+		sysctl_sched_boost = *data;
 done:
 	return ret;
 }
