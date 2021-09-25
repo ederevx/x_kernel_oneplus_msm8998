@@ -365,6 +365,31 @@ schedtune_update_timestamp(struct task_struct *p)
 	return task_has_rt_policy(p);
 }
 
+static inline bool
+schedtune_set_enqueued(struct task_struct *p, bool state)
+{
+	/* Task has already de/enqueued, no need to change */
+	if (state == p->schedtune_enqueued)
+		return false;
+
+	p->schedtune_enqueued = state;
+	return true;
+}
+
+static inline int schedtune_task_boost_raw(struct task_struct *p)
+{
+	struct schedtune *st;
+	int task_boost;
+
+	/* Get task boost value */
+	rcu_read_lock();
+	st = task_schedtune(p);
+	task_boost = st->boost;
+	rcu_read_unlock();
+
+	return task_boost;
+}
+
 static inline void
 schedtune_tasks_update(struct task_struct *p, int cpu, int idx, int task_count)
 {
@@ -391,17 +416,6 @@ schedtune_tasks_update(struct task_struct *p, int cpu, int idx, int task_count)
 			bg->group[idx].ts);
 }
 
-static inline bool
-schedtune_set_enqueued(struct task_struct *p, bool state)
-{
-	/* Task has already de/enqueued, no need to change */
-	if (state == p->schedtune_enqueued)
-		return false;
-
-	p->schedtune_enqueued = state;
-	return true;
-}
-
 /*
  * NOTE: This function must be called while holding the lock on the CPU RQ
  */
@@ -422,6 +436,10 @@ void schedtune_enqueue_task(struct task_struct *p, int cpu)
 	 * CPU boosting while the task is exiting.
 	 */
 	if (p->flags & PF_EXITING)
+		return;
+
+	/* Only enqueue boosted tasks */
+	if (!schedtune_task_boost_raw(p))
 		return;
 
 	if (!schedtune_set_enqueued(p, true))
@@ -638,22 +656,13 @@ int schedtune_cpu_boost(int cpu)
 
 int schedtune_task_boost(struct task_struct *p)
 {
-	struct schedtune *st;
-	int task_boost;
-
 	if (!unlikely(schedtune_initialized))
 		return 0;
 
 	if (schedtune_input_timeout())
 		return 0;
 
-	/* Get task boost value */
-	rcu_read_lock();
-	st = task_schedtune(p);
-	task_boost = st->boost;
-	rcu_read_unlock();
-
-	return task_boost;
+	return schedtune_task_boost_raw(p);
 }
 
 /*  The same as schedtune_task_boost except assuming the caller has the rcu read
