@@ -33,10 +33,21 @@
 #define TOTAL_KEYCODES 6
 
 /*
+ * Switch dev values by OP
+ */
+typedef enum {
+	MODE_UNKNOWN,
+	MODE_MUTE,
+	MODE_DO_NOT_DISTURB,
+	MODE_NORMAL,
+	MODE_MAX_NUM
+} tri_mode_t;
+
+/*
  * Default mapping between OP's sti-state switch and OPPO's key codes
  * see Constants.java in device/oppo/common
  */
-static int current_mode = 0;
+static int current_mode = MODE_UNKNOWN;
 static int current_keyCode = KEYCODE_BASE;
 static int keyCode_slider_top = KEYCODE_BASE + 1;
 static int keyCode_slider_middle = KEYCODE_BASE + 2;
@@ -70,26 +81,47 @@ static DEFINE_RAW_SPINLOCK(switch_lock);
 
 static void switch_dev_work(struct work_struct *work)
 {
-	int keyCode = current_keyCode, mode = current_mode;
+	int keyCode = current_keyCode, mode = current_mode; 
+	int total = 0, i;
+	bool switch_state[MODE_MAX_NUM];
 
-	raw_spin_lock(&switch_lock);
-	if (!gpio_get_value(switch_data->key1_gpio)) {
-		mode = 1;
-		keyCode = keyCode_slider_top;
-	} else if (!gpio_get_value(switch_data->key2_gpio)) {
-		mode = 2;
-		keyCode = keyCode_slider_middle;
-	} else if (!gpio_get_value(switch_data->key3_gpio)) {
-		mode = 3;
-		keyCode = keyCode_slider_bottom;
+	switch_state[MODE_MUTE] = !gpio_get_value(switch_data->key1_gpio);
+	switch_state[MODE_DO_NOT_DISTURB] = !gpio_get_value(switch_data->key2_gpio);
+	switch_state[MODE_NORMAL] = !gpio_get_value(switch_data->key3_gpio);
+
+	for (i = MODE_MUTE; i < MODE_MAX_NUM; i++) {
+		if (!switch_state[i])
+			continue;
+
+		/* Try again if tri-state is transitioning */
+		if (++total > 1) {
+			if (!work_pending(&switch_data->work))
+				queue_work(switch_data->wq, &switch_data->work);
+			return;
+		}
+
+		mode = i;
 	}
-	raw_spin_unlock(&switch_lock);
 
 	if (mode != current_mode) {
 		current_mode = mode;
-		switch_set_state(&switch_data->sdev, current_mode);
+		switch_set_state(&switch_data->sdev, mode);
 		printk("%s ,tristate set to state(%d) \n", __func__, switch_data->sdev.state);
 	}
+
+	raw_spin_lock(&switch_lock);
+	switch (mode) {
+		case MODE_MUTE:
+			keyCode = keyCode_slider_top;
+			break;
+		case MODE_DO_NOT_DISTURB:
+			keyCode = keyCode_slider_middle;
+			break;
+		case MODE_NORMAL:
+			keyCode = keyCode_slider_bottom;
+			break;
+	}
+	raw_spin_unlock(&switch_lock);
 
 	if (keyCode != current_keyCode) {
 		current_keyCode = keyCode;
