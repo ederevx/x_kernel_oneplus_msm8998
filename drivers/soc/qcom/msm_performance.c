@@ -390,6 +390,8 @@ static const struct kernel_param_ops param_ops_managed_online_cpus = {
 device_param_cb(managed_online_cpus, &param_ops_managed_online_cpus,
 							NULL, 0444);
 #endif
+
+#if 0
 /*
  * Userspace sends cpu#:min_freq_value to vote for min_freq_value as the new
  * scaling_min. To withdraw its vote it needs to enter cpu#:0
@@ -547,6 +549,7 @@ static const struct kernel_param_ops param_ops_cpu_max_freq = {
 	.get = get_cpu_max_freq,
 };
 module_param_cb(cpu_max_freq, &param_ops_cpu_max_freq, NULL, 0644);
+#endif
 
 static int set_ip_evt_trigger_threshold(const char *buf,
 		const struct kernel_param *kp)
