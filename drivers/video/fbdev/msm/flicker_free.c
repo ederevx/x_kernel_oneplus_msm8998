@@ -7,7 +7,7 @@
  * Copyright (C) 2018, Devries <therkduan@gmail.com>
  * Copyright (C) 2019-2020, Tanish <tanish2k09.dev@gmail.com>
  * Copyright (C) 2020, shxyke <shxyke@gmail.com>
- * Copyright (C) 2020, ederekun <sedrickvince@gmail.com>
+ * Copyright (C) 2021, ederekun <sedrickvince@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
