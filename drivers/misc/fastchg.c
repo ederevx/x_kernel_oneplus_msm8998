@@ -50,7 +50,7 @@ static ssize_t force_fast_charge_store(struct kobject *kobj, struct kobj_attribu
 {
 	int temp;
 	sscanf(buf, "%d ", &temp);
-	force_fast_charge = (temp != 1) ? 0 : 1;
+	force_fast_charge = !!temp;
 	return count;
 }
 
@@ -66,27 +66,20 @@ static struct attribute_group force_fast_charge_attr_group = {
 	.attrs = force_fast_charge_attrs
 };
 
-/* Initialize fast charge sysfs folder */
-static struct kobject *force_fast_charge_kobj;
-
 static int force_fast_charge_init(void)
 {
+	struct kobject *kobj;
 	int ret = 0;
 
-	force_fast_charge_kobj = kobject_create_and_add("fast_charge", kernel_kobj);
-	if (!force_fast_charge_kobj)
+	kobj = kobject_create_and_add("fast_charge", kernel_kobj);
+	if (!kobj)
 		return -ENOMEM;
 
-	ret = sysfs_create_group(force_fast_charge_kobj, &force_fast_charge_attr_group);
+	ret = sysfs_create_group(kobj, &force_fast_charge_attr_group);
 	if (ret)
-		kobject_put(force_fast_charge_kobj);
+		kobject_put(kobj);
 
 	return ret;
 }
 
-static void force_fast_charge_exit(void)
-{
-	kobject_put(force_fast_charge_kobj);
-}
 module_init(force_fast_charge_init);
-module_exit(force_fast_charge_exit);
