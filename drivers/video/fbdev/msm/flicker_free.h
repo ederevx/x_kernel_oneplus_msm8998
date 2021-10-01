@@ -23,11 +23,11 @@
 #ifndef _FLICKER_FREE_H
 #define _FLICKER_FREE_H
 
-/* Display driver data copies */
-extern struct msm_fb_data_type *ff_mfd_copy;
-extern uint32_t ff_bl_lvl_cpy;
-
-/* You can use this function to remap the physical backlight level */
+/* Use this function to remap the physical backlight level */
 uint32_t mdss_panel_calc_backlight(uint32_t bl_lvl);
+
+/* Functions to set internal variables */
+void mdss_fb_update_flicker_free_mfd(struct msm_fb_data_type *mfd);
+void mdss_panel_set_elvss_off_threshold(int val);
 
 #endif  /* _FLICKER_FREE_H */
