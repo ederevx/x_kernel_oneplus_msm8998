@@ -78,6 +78,7 @@
 		qcom,mdss-dsi-te-using-te-pin;
 		qcom,mdss-dsi-t-clk-post = <0x07>;
 		qcom,mdss-dsi-t-clk-pre = <0x29>;
+		qcom,mdss-dsi-panel-elvss-off-thresh = <330>;
 		qcom,mdss-dsi-bl-min-level = <1>;
 		qcom,mdss-dsi-bl-max-level = <1023>;
 		qcom,mdss-dsi-dma-trigger = "trigger_sw";
