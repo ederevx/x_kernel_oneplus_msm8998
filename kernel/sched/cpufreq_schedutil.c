@@ -94,8 +94,8 @@ static bool sugov_should_update_freq(struct sugov_policy *sg_policy, u64 time)
 	 * the right set of CPUs and any CPU can find the next frequency and
 	 * schedule the kthread.
 	 */
-	if (sg_policy->policy->fast_switch_enabled &&
-	    !cpufreq_this_cpu_can_update(sg_policy->policy))
+	if (unlikely(sg_policy->policy->fast_switch_enabled &&
+	    !cpufreq_this_cpu_can_update(sg_policy->policy)))
 		return false;
 
 	if (unlikely(sg_policy->need_freq_update))
@@ -301,7 +301,7 @@ static void sugov_update_single(struct update_util_data *hook, u64 time,
 	 * concurrently on two different CPUs for the same target and it is not
 	 * necessary to acquire the lock in the fast switch case.
 	 */
-	if (sg_policy->policy->fast_switch_enabled) {
+	if (unlikely(sg_policy->policy->fast_switch_enabled)) {
 		sugov_fast_switch(sg_policy, time, next_f);
 	} else {
 		raw_spin_lock(&sg_policy->update_lock);
@@ -371,7 +371,7 @@ static void sugov_update_shared(struct update_util_data *hook, u64 time,
 		else
 			next_f = sugov_next_freq_shared(sg_cpu, time);
 
-		if (sg_policy->policy->fast_switch_enabled)
+		if (unlikely(sg_policy->policy->fast_switch_enabled))
 			sugov_fast_switch(sg_policy, time, next_f);
 		else
 			sugov_deferred_update(sg_policy, time, next_f);
