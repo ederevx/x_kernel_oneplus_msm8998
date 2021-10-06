@@ -750,7 +750,7 @@ static void write_default_values(struct cgroup_subsys_state *css)
 		{ "background",	0, 0 },
 		{ "foreground",	0, 1 },
 		{ "rt",		0, 0 },
-		{ "top-app",	10, 1 },
+		{ "top-app",	25, 1 },
 	};
 	int i;
 
