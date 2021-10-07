@@ -28,6 +28,7 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#include <linux/binfmts.h>
 #include <linux/cgroup.h>
 #include <linux/cred.h>
 #include <linux/ctype.h>
