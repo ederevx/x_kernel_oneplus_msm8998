@@ -3765,6 +3765,13 @@ static ssize_t key_swap_write_func(struct file *file, const char __user *user_bu
 	return count;
 }
 
+static const struct file_operations key_switch_proc_fops = {
+	.write = key_swap_write_func,
+	.read =  key_swap_read_func,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+};
+
 static const struct file_operations key_rep_proc_fops = {
 	.write = key_swap_write_func,
 	.read =  key_swap_read_func,
@@ -3886,6 +3893,7 @@ static int init_synaptics_proc(struct synaptics_ts_data *ts)
 	// disable button swap and key disabler proc nodes for 17801 (dumpling)
 	if (!ts->support_1080x2160_tp) {
 		CREATE_PROC_NODE(s1302, key_rep, 0666);
+		CREATE_PROC_NODE(touchpanel, key_switch, 0666);
 		CREATE_PROC_NODE(touchpanel, key_disable, 0666);
 	}
 #endif
