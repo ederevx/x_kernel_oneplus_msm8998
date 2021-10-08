@@ -2699,6 +2699,17 @@ static inline void sched_autogroup_exit(struct signal_struct *sig) { }
 static inline void sched_autogroup_exit_task(struct task_struct *p) { }
 #endif
 
+#if defined(CONFIG_SCHED_TUNE) && defined(CONFIG_CGROUP_SCHEDTUNE)
+extern atomic64_t schedtune_input_ts;
+
+static inline void schedtune_input_update(void)
+{
+	atomic64_set(&schedtune_input_ts, sched_clock());
+}
+#else
+static inline void schedtune_input_update(void) { }
+#endif
+
 extern int yield_to(struct task_struct *p, bool preempt);
 extern void set_user_nice(struct task_struct *p, long nice);
 extern int task_prio(const struct task_struct *p);

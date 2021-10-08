@@ -10,6 +10,7 @@
 #include <linux/mm.h>
 #include <linux/moduleparam.h>
 #include <linux/oom.h>
+#include <linux/sched.h>
 #include <linux/sort.h>
 #include <linux/vmpressure.h>
 
@@ -189,6 +190,9 @@ static void scan_and_kill(void)
 	int i, nr_to_kill, nr_found = 0;
 	unsigned long pages_found;
 
+	/* Update schedtune input timestamp */
+	schedtune_input_update();
+
 	/* Populate the victims array with tasks sorted by adj and then size */
 	pages_found = find_victims(&nr_found);
 	if (unlikely(!pages_found)) {
@@ -222,6 +226,9 @@ static void scan_and_kill(void)
 	nr_victims = nr_to_kill;
 	write_unlock(&mm_free_lock);
 
+	/* Update schedtune input timestamp */
+	schedtune_input_update();
+
 	/* Kill the victims */
 	for (i = 0; i < nr_to_kill; i++) {
 		static const struct sched_param sched_zero_prio;
@@ -253,6 +260,9 @@ static void scan_and_kill(void)
 		/* Finally release the victim's task lock acquired earlier */
 		task_unlock(vtsk);
 	}
+
+	/* Update schedtune input timestamp */
+	schedtune_input_update();
 
 	/* Wait until all the victims die or until the timeout is reached */
 	if (!wait_for_completion_timeout(&reclaim_done, RECLAIM_EXPIRES))

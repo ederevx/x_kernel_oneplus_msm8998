@@ -14,6 +14,7 @@
 #include <linux/module.h>
 #include <linux/devfreq.h>
 #include <linux/math64.h>
+#include <linux/sched.h>
 #include <linux/spinlock.h>
 #include <linux/slab.h>
 #include <linux/io.h>
@@ -416,6 +417,10 @@ static int tz_get_target_freq(struct devfreq *devfreq, unsigned long *freq,
 	}
 
 	*freq = devfreq->profile->freq_table[level];
+	/* Keep schedtune functions awake when GPU is running higher than min */
+	if (*freq > devfreq->min_freq && devfreq->previous_freq > devfreq->min_freq)
+		schedtune_input_update();
+
 	return 0;
 }
 
