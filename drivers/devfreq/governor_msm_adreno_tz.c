@@ -14,6 +14,7 @@
 #include <linux/module.h>
 #include <linux/devfreq.h>
 #include <linux/math64.h>
+#include <linux/sched.h>
 #include <linux/spinlock.h>
 #include <linux/slab.h>
 #include <linux/io.h>
@@ -156,6 +157,9 @@ void compute_work_load(struct devfreq_dev_status *stats,
 	acc_relative_busy += busy;
 
 	spin_unlock(&sample_lock);
+
+	if (((busy * 100) / stats->total_time) >= 10)
+		schedtune_interactive(update_expires);
 }
 
 /* Trap into the TrustZone, and call funcs there. */

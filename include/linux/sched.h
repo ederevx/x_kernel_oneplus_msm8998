@@ -2687,6 +2687,13 @@ static inline void sched_autogroup_exit(struct signal_struct *sig) { }
 static inline void sched_autogroup_exit_task(struct task_struct *p) { }
 #endif
 
+#ifdef CONFIG_SCHED_TUNE
+extern struct lwtimeout schedtune_interactive_lwt;
+#define schedtune_interactive(cmd) lwtimeout_##cmd(&schedtune_interactive_lwt)
+#else
+#define schedtune_interactive(cmd) ({ int ret = 0; ret; })
+#endif
+
 extern int yield_to(struct task_struct *p, bool preempt);
 extern void set_user_nice(struct task_struct *p, long nice);
 extern int task_prio(const struct task_struct *p);
