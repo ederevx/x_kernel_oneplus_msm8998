@@ -81,7 +81,7 @@ static DEFINE_RAW_SPINLOCK(switch_lock);
 
 static void switch_dev_work(struct work_struct *work)
 {
-	int keyCode = current_keyCode, mode = current_mode; 
+	int keyCode = current_keyCode, mode = current_mode, inv_mode = current_mode; 
 	int total = 0, i;
 	bool switch_state[MODE_MAX_NUM];
 
@@ -90,17 +90,38 @@ static void switch_dev_work(struct work_struct *work)
 	switch_state[MODE_NORMAL] = !gpio_get_value(switch_data->key3_gpio);
 
 	for (i = MODE_MUTE; i < MODE_MAX_NUM; i++) {
-		if (!switch_state[i])
-			continue;
+		if (!switch_state[i]) {
+			inv_mode = i;
+		} else {
+			mode = i;
+			total++;
+		}
+	}
 
-		/* Try again if tri-state is transitioning */
-		if (++total > 1) {
+	switch (total) {
+		case 1:
+			/* Passthrough, direct key GPIO pins */
+			break;
+		case 2:
+			/*
+			 * Altered pins, DND and normal are swapped since DND == 11 (3)
+			 * while normal == 10 (2) according to OnePlus TSKD. Mute remains
+			 * at 01 (1).
+			 */
+			mode = inv_mode;
+			if (mode == MODE_MUTE)
+				break;
+
+			if (mode == MODE_NORMAL)
+				mode = MODE_DO_NOT_DISTURB;
+			else
+				mode = MODE_NORMAL;
+			break;
+		default:
+			/* Try again if tri-state is transitioning */
 			if (!work_pending(&switch_data->work))
 				queue_work(switch_data->wq, &switch_data->work);
 			return;
-		}
-
-		mode = i;
 	}
 
 	if (mode != current_mode) {
