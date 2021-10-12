@@ -34,7 +34,6 @@
 #define	FW_CHECK_SUCCESS	1
 
 #define SHOW_FW_VERSION_DELAY_MS 18000
-static struct pm_qos_request big_cpu_update_freq;
 
 struct fastchg_device_info {
 	struct i2c_client		*client;
@@ -801,7 +800,6 @@ static void adapter_update_work_func(struct work_struct *work)
 		clk_set_rate(cnoc_clk, 75000000);
 		clk_prepare_enable(cnoc_clk);
 	}
-	pm_qos_update_request(&big_cpu_update_freq, MAX_CPUFREQ);
 	msleep(1000);
 	for (i = 0; i < 3; i++) {
 		update_result =
@@ -833,7 +831,6 @@ static void adapter_update_work_func(struct work_struct *work)
 	oneplus_notify_pmic_check_charger_present();
 	oneplus_notify_dash_charger_present(false);
 	reset_mcu_and_request_irq(chip);
-	pm_qos_update_request(&big_cpu_update_freq, MIN_CPUFREQ);
 	clk_disable_unprepare(snoc_clk);
 	clk_disable_unprepare(cnoc_clk);
 
@@ -1259,9 +1256,6 @@ static int dash_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	INIT_DELAYED_WORK(&di->update_firmware, dashchg_fw_update);
 	INIT_DELAYED_WORK(&di->adapter_update_work, adapter_update_work_func);
 
-	pm_qos_add_request(&big_cpu_update_freq,
-		PM_QOS_C1_CPUFREQ_MIN, MIN_CPUFREQ);
-
 	init_timer(&di->watchdog);
 	di->watchdog.data = (unsigned long)di;
 	di->watchdog.function = di_watchdog;
@@ -1288,7 +1282,6 @@ static int dash_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	return 0;
 
 err_misc_register_failed:
-	pm_qos_remove_request(&big_cpu_update_freq);
 err_read_dt:
 	kfree(di);
 err_check_functionality_failed:
@@ -1311,7 +1304,6 @@ static int dash_remove(struct i2c_client *client)
 		gpio_free(di->ap_clk);
 	if (gpio_is_valid(di->ap_data))
 		gpio_free(di->ap_data);
-	pm_qos_remove_request(&big_cpu_update_freq);
 
 	return 0;
 }
