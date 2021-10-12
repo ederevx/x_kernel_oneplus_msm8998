@@ -3752,6 +3752,18 @@ static ssize_t key_swap_read_func(struct file *file, char __user *user_buf, size
 	return ret;
 }
 
+/* Add inverted read for OOS */
+static ssize_t key_swap_inv_read_func(struct file *file, char __user *user_buf, size_t count, loff_t *ppos)
+{
+	int ret = 0;
+	char page[PAGESIZE];
+
+	ret = sprintf(page, "%d\n", !ts_g->key_swap);
+	ret = simple_read_from_buffer(user_buf, count, ppos, page, strlen(page));
+
+	return ret;
+}
+
 static ssize_t key_swap_write_func(struct file *file, const char __user *user_buf, size_t count, loff_t *ppos)
 {
 	int ret, write_flag = 0;
@@ -3767,7 +3779,7 @@ static ssize_t key_swap_write_func(struct file *file, const char __user *user_bu
 
 static const struct file_operations key_switch_proc_fops = {
 	.write = key_swap_write_func,
-	.read =  key_swap_read_func,
+	.read =  key_swap_inv_read_func,
 	.open = simple_open,
 	.owner = THIS_MODULE,
 };
