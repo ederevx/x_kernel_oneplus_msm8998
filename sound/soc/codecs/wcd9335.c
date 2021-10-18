@@ -2319,43 +2319,6 @@ static int tasha_put_anc_slot(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
-static int tasha_get_Bob_Power(struct snd_kcontrol *kcontrol,
-	struct snd_ctl_elem_value *ucontrol)
-{
-	return 0;
-}
-
-static int tasha_put_Bob_Power(struct snd_kcontrol *kcontrol,
-	struct snd_ctl_elem_value *ucontrol)
-{
-	int ret = 0;
-	int mode;
-	pr_err("%s value = %d\n",
-	__func__, (uint32_t)ucontrol->value.integer.value[0]);
-
-	if (bob_power == NULL)
-		return 0;
-
-	if (ucontrol->value.integer.value[0] == 1) {
-		pr_err("%s enable vreg_bob power\n", __func__);
-		ret = regulator_set_mode(bob_power, REGULATOR_MODE_FAST);
-		if (ret)
-			pr_err("%s fail to enable vreg_bob power\n", __func__);
-	} else {
-		pr_err("%s disable vreg_bob power\n", __func__);
-		mode = regulator_get_mode(bob_power);
-		if (mode == REGULATOR_MODE_FAST) {
-			ret = regulator_set_mode(bob_power,
-				REGULATOR_MODE_NORMAL);
-			if (ret)
-				pr_err("%s fail to disable vreg_bob power\n",
-				__func__);
-		}
-	}
-
-	return 0;
-}
-
 static int tasha_get_anc_func(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_value *ucontrol)
 {
@@ -8659,9 +8622,6 @@ static const struct snd_kcontrol_new tasha_snd_controls[] = {
 	SOC_SINGLE_EXT("ANC Slot", SND_SOC_NOPM, 0, 100, 0, tasha_get_anc_slot,
 		       tasha_put_anc_slot),
 
-	SOC_SINGLE_EXT("BOB Power", SND_SOC_NOPM, 0, 100, 0,
-				tasha_get_Bob_Power, tasha_put_Bob_Power),
-
 	SOC_ENUM_EXT("ANC Function", tasha_anc_func_enum, tasha_get_anc_func,
 		     tasha_put_anc_func),
 
@@ -13852,6 +13812,11 @@ static int tasha_codec_probe(struct snd_soc_codec *codec)
 	tasha->spk_anc_dwork.tasha = tasha;
 	INIT_DELAYED_WORK(&tasha->spk_anc_dwork.dwork,
 			  tasha_spk_anc_update_callback);
+
+	pr_err("%s enable vreg_bob power\n", __func__);
+	ret = regulator_set_mode(bob_power, REGULATOR_MODE_FAST);
+	if (ret)
+		pr_err("%s fail to enable vreg_bob power\n", __func__);
 
 	mutex_lock(&tasha->codec_mutex);
 	snd_soc_dapm_disable_pin(dapm, "ANC LINEOUT1");
