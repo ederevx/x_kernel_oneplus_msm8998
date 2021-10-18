@@ -203,7 +203,7 @@ static int init_early_domain_data(struct early_domain_core *core_data)
 	memset(&core_data->ed_qos_request, 0,
 		sizeof(core_data->ed_qos_request));
 	core_data->ed_qos_request.type = PM_QOS_REQ_AFFINE_CORES;
-	atomic_set(&core_data->ed_qos_request.cpus_affine, *cpumask_bits(&core_data->cpumask));
+	core_data->ed_qos_request.cpus_affine = *cpumask_bits(&core_data->cpumask);
 	pm_qos_add_request(&core_data->ed_qos_request,
 		PM_QOS_CPU_DMA_LATENCY, PM_QOS_CPU_DMA_LAT_DEFAULT_VALUE);
 	wakeup_source_init(&core_data->ed_wake_lock, "early_domain");

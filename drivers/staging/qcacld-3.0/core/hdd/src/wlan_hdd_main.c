@@ -8741,7 +8741,7 @@ static inline void hdd_pm_qos_update_cpu_mask(cpumask_t *mask,
 static inline void hdd_pm_qos_update_request(struct hdd_context *hdd_ctx,
 					     cpumask_t *pm_qos_cpu_mask)
 {
-	atomic_set(&hdd_ctx->pm_qos_req.cpus_affine, *cpumask_bits(pm_qos_cpu_mask));
+	hdd_ctx->pm_qos_req.cpus_affine = *cpumask_bits(pm_qos_cpu_mask);
 
 	/* Latency value to be read from INI */
 	if (cpumask_empty(pm_qos_cpu_mask))
@@ -8763,9 +8763,8 @@ static inline void hdd_update_pm_qos_affine_cores(struct hdd_context *hdd_ctx)
 	cpumask_t pm_qos_cpu_mask;
 
 	hdd_ctx->pm_qos_req.type = PM_QOS_REQ_AFFINE_CORES;
-	atomic_set(&hdd_ctx->pm_qos_req.cpus_affine, 0);
 	hdd_pm_qos_update_cpu_mask(&pm_qos_cpu_mask, false);
-	atomic_set(&hdd_ctx->pm_qos_req.cpus_affine, *cpumask_bits(&pm_qos_cpu_mask));
+	hdd_ctx->pm_qos_req.cpus_affine = *cpumask_bits(&pm_qos_cpu_mask);
 }
 #else
 static inline void hdd_update_pm_qos_affine_cores(struct hdd_context *hdd_ctx)
