@@ -357,6 +357,13 @@ schedtune_boostgroup_update(int idx, int boost)
 #define DEQUEUE_TASK -1
 
 static inline bool
+schedtune_adj_bypass(struct task_struct *p)
+{
+	/* Skip tasks with adj value more than PERCEPTIBLE_APP_ADJ */
+	return p->signal->oom_score_adj >= 250;
+}
+
+static inline bool
 schedtune_update_timestamp(struct task_struct *p)
 {
 	if (sched_feat(SCHEDTUNE_BOOST_HOLD_ALL))
@@ -438,6 +445,9 @@ void schedtune_enqueue_task(struct task_struct *p, int cpu)
 	if (p->flags & PF_EXITING)
 		return;
 
+	if (schedtune_adj_bypass(p))
+		return;
+
 	/* Only enqueue boosted tasks */
 	if (!schedtune_task_boost_raw(p))
 		return;
@@ -489,6 +499,13 @@ int schedtune_can_attach(struct cgroup_taskset *tset)
 
 	cgroup_taskset_for_each(task, css, tset) {
 
+		enqueued = task->schedtune_enqueued;
+		boosted = !schedtune_adj_bypass(task);
+
+		/* If the task won't be dequeued nor enqueued, skip it */
+		if (!(enqueued || boosted))
+			continue;
+
 		/*
 		 * Lock the CPU's RQ the task is enqueued to avoid race
 		 * conditions with migration code while the task is being
@@ -512,8 +529,8 @@ int schedtune_can_attach(struct cgroup_taskset *tset)
 		dst_bg = css_st(css)->idx;
 		src_bg = task_schedtune(task)->idx;
 
-		boosted = !!bg->group[dst_bg].boost;
-		enqueued = schedtune_set_enqueued(task, boosted) ? !boosted : boosted;
+		/* Check if destination is boosted */
+		boosted *= !!bg->group[dst_bg].boost;
 
 		/*
 		 * Current task is not changing boostgroup, which can
@@ -553,6 +570,10 @@ int schedtune_can_attach(struct cgroup_taskset *tset)
 
 		raw_spin_unlock(&bg->lock);
 		unlock_rq_of(rq, task, &rf);
+
+		/* Change enqueued state according to destination */
+		if (enqueued != boosted)
+			task->schedtune_enqueued = boosted;
 	}
 
 	return 0;
@@ -659,6 +680,9 @@ int schedtune_task_boost(struct task_struct *p)
 	if (!unlikely(schedtune_initialized))
 		return 0;
 
+	if (schedtune_adj_bypass(p))
+		return 0;
+
 	if (schedtune_input_timeout())
 		return 0;
 
@@ -674,6 +698,9 @@ int schedtune_task_boost_rcu_locked(struct task_struct *p)
 	int task_boost;
 
 	if (unlikely(!schedtune_initialized))
+		return 0;
+
+	if (schedtune_adj_bypass(p))
 		return 0;
 
 	if (schedtune_input_timeout())
@@ -692,6 +719,9 @@ int schedtune_prefer_idle(struct task_struct *p)
 	int prefer_idle;
 
 	if (!unlikely(schedtune_initialized))
+		return 0;
+
+	if (schedtune_adj_bypass(p))
 		return 0;
 
 	if (schedtune_input_timeout())
