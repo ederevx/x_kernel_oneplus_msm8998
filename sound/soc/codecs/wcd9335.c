@@ -3745,6 +3745,8 @@ static int tasha_set_compander(struct snd_kcontrol *kcontrol,
 				(value ? 0x00:0x20));
 		break;
 	case COMPANDER_7:
+		/* Force enable COMPANDER_7 for speaker boost */ 
+		tasha->comp_enabled[comp] = 1;
 		break;
 	case COMPANDER_8:
 		break;
@@ -5258,8 +5260,8 @@ static int tasha_codec_enable_swr(struct snd_soc_dapm_widget *w,
 static int tasha_codec_config_ear_spkr_gain(struct snd_soc_codec *codec,
 					    int event, int gain_reg)
 {
-	int comp_gain_offset, val;
 	struct tasha_priv *tasha = snd_soc_codec_get_drvdata(codec);
+	int comp_gain_offset, val, spkr_gain = tasha->ear_spkr_gain;
 
 	switch (tasha->spkr_mode) {
 	/* Compander gain in SPKR_MODE1 case is 12 dB */
@@ -5272,15 +5274,18 @@ static int tasha_codec_config_ear_spkr_gain(struct snd_soc_codec *codec,
 		break;
 	}
 
+	/* Cancel out compander offset and increase gain by 5dB */
+	spkr_gain += comp_gain_offset + 5;
+
 	switch (event) {
 	case SND_SOC_DAPM_POST_PMU:
 		/* Apply ear spkr gain only if compander is enabled */
 		if (tasha->comp_enabled[COMPANDER_7] &&
 		    (gain_reg == WCD9335_CDC_RX7_RX_VOL_CTL ||
 		     gain_reg == WCD9335_CDC_RX7_RX_VOL_MIX_CTL) &&
-		    (tasha->ear_spkr_gain != 0)) {
+		    (spkr_gain != 0)) {
 			/* For example, val is -8(-12+5-1) for 4dB of gain */
-			val = comp_gain_offset + tasha->ear_spkr_gain - 1;
+			val = comp_gain_offset + spkr_gain - 1;
 			snd_soc_write(codec, gain_reg, val);
 
 			dev_dbg(codec->dev, "%s: RX7 Volume %d dB\n",
@@ -5295,7 +5300,7 @@ static int tasha_codec_config_ear_spkr_gain(struct snd_soc_codec *codec,
 		if (tasha->comp_enabled[COMPANDER_7] &&
 		    (gain_reg == WCD9335_CDC_RX7_RX_VOL_CTL ||
 		     gain_reg == WCD9335_CDC_RX7_RX_VOL_MIX_CTL) &&
-		    (tasha->ear_spkr_gain != 0)) {
+		    (spkr_gain != 0)) {
 			snd_soc_write(codec, gain_reg, 0x0);
 
 			dev_dbg(codec->dev, "%s: Reset RX7 Volume to 0 dB\n",
@@ -13684,7 +13689,7 @@ static int tasha_codec_probe(struct snd_soc_codec *codec)
 
 	tasha->codec = codec;
 	for (i = 0; i < COMPANDER_MAX; i++)
-		tasha->comp_enabled[i] = 0;
+		tasha->comp_enabled[i] = 1;
 
 	tasha->spkr_gain_offset = RX_GAIN_OFFSET_0_DB;
 	tasha->intf_type = wcd9xxx_get_intf_type();
