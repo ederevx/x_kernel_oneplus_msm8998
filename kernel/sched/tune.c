@@ -557,13 +557,15 @@ int schedtune_can_attach(struct cgroup_taskset *tset)
 			bg->group[src_bg].tasks = max(0, tasks);
 		}
 
+		now = sched_clock_cpu(cpu);
+
 		/* Only enqueue if the group is boosted */
-		if (boosted)
+		if (boosted) {
 			bg->group[dst_bg].tasks += 1;
 
-		/* Update boost hold start for this group */
-		now = sched_clock_cpu(cpu);
-		bg->group[dst_bg].ts = now;
+			/* Update boost hold start for this group */
+			bg->group[dst_bg].ts = now;
+		}
 
 		/* Force boost group re-evaluation at next boost check */
 		bg->boost_ts = now - SCHEDTUNE_BOOST_HOLD_NS;
