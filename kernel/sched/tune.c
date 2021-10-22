@@ -218,6 +218,9 @@ schedtune_accept_deltas(int nrg_delta, int cap_delta,
  */
 #define BOOSTGROUPS_COUNT 6
 
+/* Number of actual boost groups allocated by userspace */
+static unsigned int allocated_group_num_idx __read_mostly = BOOSTGROUPS_COUNT;
+
 /* Array of configured boostgroups */
 static struct schedtune *allocated_group[BOOSTGROUPS_COUNT] = {
 	&root_schedtune,
@@ -281,7 +284,7 @@ schedtune_cpu_update(int cpu, u64 now)
 
 	bg = &per_cpu(cpu_boost_groups, cpu);
 
-	for (idx = 0; idx < BOOSTGROUPS_COUNT; ++idx) {
+	for (idx = 0; idx < allocated_group_num_idx; ++idx) {
 		/*
 		 * A boost group affects a CPU only if it has
 		 * RUNNABLE tasks on that CPU or it has hold
@@ -303,6 +306,26 @@ schedtune_cpu_update(int cpu, u64 now)
 		boost_max = 0;
 	bg->boost_max = boost_max;
 	bg->boost_ts = boost_ts;
+}
+
+/* Maximum boost_value across all SchedTune CGroups */
+static int schedtune_boost_max __read_mostly = 0;
+
+static void 
+schedtune_boost_max_update(void)
+{
+	int boost_max = INT_MIN, idx;
+
+	for (idx = 0; idx < allocated_group_num_idx; ++idx) {
+		s64 boost = allocated_group[idx]->boost;
+		if (boost_max < boost)
+			boost_max = boost;
+	}
+
+	if (boost_max == INT_MIN)
+		boost_max = 0;
+
+	schedtune_boost_max = boost_max;
 }
 
 static int
@@ -793,6 +816,9 @@ boost_write(struct cgroup_subsys_state *css, struct cftype *cft,
 		perf_constrain_idx  = threshold_idx;
 	}
 
+	/* Update boost max */
+	schedtune_boost_max_update();
+
 	/* Update CPU boost */
 	schedtune_boostgroup_update(st->idx, st->boost);
 
@@ -977,6 +1003,9 @@ schedtune_css_alloc(struct cgroup_subsys_state *parent_css)
 		       BOOSTGROUPS_COUNT);
 		return ERR_PTR(-ENOSPC);
 	}
+
+	/* Store actual number of boost groups created */
+	allocated_group_num_idx = idx;
 
 	st = kzalloc(sizeof(*st), GFP_KERNEL);
 	if (!st)
