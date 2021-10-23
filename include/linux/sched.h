@@ -1630,6 +1630,7 @@ struct task_struct {
 #endif
 #ifdef CONFIG_SCHED_TUNE
 	bool schedtune_enqueued;
+	bool schedtune_max_prio;
 #endif
 	struct sched_dl_entity dl;
 
