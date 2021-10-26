@@ -2212,18 +2212,6 @@ static inline void cpufreq_update_util(struct rq *rq, unsigned int flags)
 {
         struct update_util_data *data;
 
-#ifdef CONFIG_SCHED_HMP
-	/*
-	 * Skip if we've already reported, but not if this is an inter-cluster
-	 * migration
-	 */
-	if (!sched_disable_window_stats &&
-		(rq->load_reported_window == rq->window_start) &&
-		!(flags & SCHED_CPUFREQ_INTERCLUSTER_MIG))
-		return;
-	rq->load_reported_window = rq->window_start;
-#endif
-
 	data = rcu_dereference_sched(*per_cpu_ptr(&cpufreq_update_util_data,
 						  cpu_of(rq)));
         if (data)
