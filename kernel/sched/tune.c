@@ -425,17 +425,6 @@ schedtune_update_timestamp(struct task_struct *p)
 	return task_has_rt_policy(p);
 }
 
-static inline bool
-schedtune_set_enqueued(struct task_struct *p, bool state)
-{
-	/* Task has already de/enqueued, no need to change */
-	if (state == p->schedtune_enqueued)
-		return false;
-
-	p->schedtune_enqueued = state;
-	return true;
-}
-
 static inline int
 schedtune_task_boost_raw(struct task_struct *p)
 {
@@ -514,12 +503,14 @@ void schedtune_enqueue_task(struct task_struct *p, int cpu)
 	if (prio == ST_LOW_PRIO)
 		return;
 
+	if (p->schedtune_enqueued)
+		return;
+
 	/* Only enqueue boosted tasks */
 	if (!schedtune_task_boost_raw(p))
 		return;
 
-	if (!schedtune_set_enqueued(p, true))
-		return;
+	p->schedtune_enqueued = true;
 
 	/*
 	 * Boost group accouting is protected by a per-cpu lock and requires
@@ -697,8 +688,10 @@ void schedtune_dequeue_task(struct task_struct *p, int cpu)
 		return;
 	}
 
-	if (!schedtune_set_enqueued(p, false))
+	if (!p->schedtune_enqueued)
 		return;
+
+	p->schedtune_enqueued = false;
 
 	/*
 	 * Boost group accouting is protected by a per-cpu lock and requires
@@ -733,7 +726,9 @@ void schedtune_exit_task(struct task_struct *tsk)
 	/* Max prio tasks are enqueued within a special list */
 	if (tsk->schedtune_max_prio) {
 		schedtune_max_prio_tasks_update(tsk, cpu, DEQUEUE_TASK);
-	} else if (schedtune_set_enqueued(tsk, false)) {
+	} else if (tsk->schedtune_enqueued) {
+		tsk->schedtune_enqueued = false;
+
 		rcu_read_lock();
 
 		st = task_schedtune(tsk);
