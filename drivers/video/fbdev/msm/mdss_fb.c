@@ -2065,15 +2065,15 @@ void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl)
 	pdata = dev_get_platdata(&mfd->pdev->dev);
 
 	if ((pdata) && (pdata->set_backlight)) {
-#ifdef CONFIG_FB_MSM_MDSS_FLICKER_FREE
-		/* Update mfd */
-		mdss_fb_update_flicker_free_mfd(mfd);
-#endif
 		if (mfd->mdp.ad_calc_bl)
 			(*mfd->mdp.ad_calc_bl)(mfd, temp, &temp,
 							&ad_bl_notify_needed);
 		if (!IS_CALIB_MODE_BL(mfd))
 			mdss_fb_scale_bl(mfd, &temp);
+#ifdef CONFIG_FB_MSM_MDSS_FLICKER_FREE
+		/* Update flicker free */
+		mdss_fb_update_flicker_free(mfd, temp);
+#endif
 		/*
 		 * Even though backlight has been scaled, want to show that
 		 * backlight has been set to bkl_lvl to those that read from
@@ -2113,15 +2113,15 @@ void mdss_fb_update_backlight(struct msm_fb_data_type *mfd)
 	if (!mfd->allow_bl_update) {
 		pdata = dev_get_platdata(&mfd->pdev->dev);
 		if ((pdata) && (pdata->set_backlight)) {
-#ifdef CONFIG_FB_MSM_MDSS_FLICKER_FREE
-			/* Update mfd */
-			mdss_fb_update_flicker_free_mfd(mfd);
-#endif
 			mfd->bl_level = mfd->unset_bl_level;
 			temp = mfd->bl_level;
 			if (mfd->mdp.ad_calc_bl)
 				(*mfd->mdp.ad_calc_bl)(mfd, temp, &temp,
 								&bl_notify);
+#ifdef CONFIG_FB_MSM_MDSS_FLICKER_FREE
+			/* Update flicker free */
+			mdss_fb_update_flicker_free(mfd, temp);
+#endif
 			if (bl_notify)
 				mdss_fb_bl_update_notify(mfd,
 					NOTIFY_TYPE_BL_AD_ATTEN_UPDATE);

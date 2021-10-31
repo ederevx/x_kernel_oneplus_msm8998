@@ -67,7 +67,9 @@ static uint32_t copyback = 0;
 
 /* State booleans */
 static bool pcc_enabled = false;
-static bool mdss_backlight_enable = true; /* Enable by default */
+static bool mdss_backlight_enable = false;
+
+static uint32_t last_bl_lvl = 0;
 
 static inline int flicker_free_push(int val)
 {
@@ -145,6 +147,7 @@ uint32_t mdss_panel_calc_backlight(uint32_t bl_lvl)
 static ssize_t ff_write_proc(struct file *file, const char __user *buffer,
 								size_t count, loff_t *pos)
 {
+	struct mdss_panel_data *pdata;
 	int value = 0;
 	bool state;
 
@@ -153,8 +156,10 @@ static ssize_t ff_write_proc(struct file *file, const char __user *buffer,
 
 	if (mdss_backlight_enable != state) {
 		mdss_backlight_enable = state;
-		if (likely(ff_mfd))
-			mdss_fb_update_backlight(ff_mfd);
+		if (likely(ff_mfd)) {
+			pdata = dev_get_platdata(&ff_mfd->pdev->dev);
+			pdata->set_backlight(pdata, last_bl_lvl);
+		}
 	}
 
 	return count;
@@ -180,9 +185,10 @@ static const struct file_operations proc_file_fops_state = {
 	.release = single_release,
 };
 
-void mdss_fb_update_flicker_free_mfd(struct msm_fb_data_type *mfd)
+void mdss_fb_update_flicker_free(struct msm_fb_data_type *mfd, uint32_t bl_lvl)
 {
 	ff_mfd = mfd;
+	last_bl_lvl = bl_lvl;
 }
 
 void mdss_panel_set_elvss_off_threshold(int val)
