@@ -114,7 +114,8 @@ __schedtune_accept_deltas(int nrg_delta, int cap_delta,
 #define SCHEDTUNE_INPUT_NS (5000 * NSEC_PER_MSEC)
 
 /* Keep track of interactivity */
-atomic64_t schedtune_input_ts __cacheline_aligned_in_smp = ATOMIC_INIT(0);
+static u64 schedtune_input_ts __cacheline_aligned_in_smp = 0;
+static DEFINE_RAW_SPINLOCK(input_lock);
 
 /*
  * EAS scheduler tunables for task groups.
@@ -261,7 +262,7 @@ static inline bool schedtune_boost_timeout(u64 now, u64 ts)
 
 static inline bool schedtune_input_timeout(void)
 {
-	return ((sched_clock() - atomic64_read(&schedtune_input_ts)) > 
+	return ((sched_clock() - schedtune_input_ts) > 
 			SCHEDTUNE_INPUT_NS);
 }
 
@@ -945,10 +946,24 @@ static struct cftype files[] = {
 	{ }	/* terminate */
 };
 
+static inline void __schedtune_input_update(void)
+{
+	/* We only need to update once at a time */
+	if (raw_spin_trylock(&input_lock)) {
+		schedtune_input_ts = sched_clock();
+		raw_spin_unlock(&input_lock);
+	}
+}
+
+void schedtune_input_update(void)
+{
+	__schedtune_input_update();
+}
+
 static void schedtune_input_event(struct input_handle *handle,
 		unsigned int type, unsigned int code, int value)
 {
-	schedtune_input_update();
+	__schedtune_input_update();
 }
 
 static int schedtune_input_connect(struct input_handler *handler,

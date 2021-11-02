@@ -2702,15 +2702,7 @@ static inline void sched_autogroup_exit_task(struct task_struct *p) { }
 #endif
 
 #if defined(CONFIG_SCHED_TUNE) && defined(CONFIG_CGROUP_SCHEDTUNE)
-extern atomic64_t schedtune_input_ts;
-
-static inline void schedtune_input_update(void)
-{
-	uint64_t now = sched_clock();
-
-	if (now != atomic64_read(&schedtune_input_ts))
-		atomic64_set(&schedtune_input_ts, now);
-}
+void schedtune_input_update(void);
 #else
 static inline void schedtune_input_update(void) { }
 #endif
