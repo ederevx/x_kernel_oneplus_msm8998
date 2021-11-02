@@ -447,7 +447,8 @@ schedtune_tasks_update(struct task_struct *p, int cpu, int idx, int task_count)
 	int tasks = bg->group[idx].tasks + task_count;
 
 	/* Update boosted tasks count while avoiding to make it negative */
-	bg->group[idx].tasks = max(0, tasks);
+	if (tasks >= 0)
+		bg->group[idx].tasks = tasks;
 
 	/* Update timeout on enqueue */
 	if (task_count > 0) {
