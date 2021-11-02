@@ -2706,7 +2706,10 @@ extern atomic64_t schedtune_input_ts;
 
 static inline void schedtune_input_update(void)
 {
-	atomic64_set(&schedtune_input_ts, sched_clock());
+	uint64_t now = sched_clock();
+
+	if (now != atomic64_read(&schedtune_input_ts))
+		atomic64_set(&schedtune_input_ts, now);
 }
 #else
 static inline void schedtune_input_update(void) { }
