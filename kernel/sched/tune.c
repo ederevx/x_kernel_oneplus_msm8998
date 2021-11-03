@@ -404,17 +404,17 @@ schedtune_prio_val(struct task_struct *p)
 }
 
 /* Count of RUNNABLE max priority tasks on a CPU */
-DEFINE_PER_CPU(atomic_t, max_prio_tasks);
+DEFINE_PER_CPU(unsigned int, max_prio_tasks);
 
 static inline void
 schedtune_max_prio_tasks_update(struct task_struct *p, int cpu, int task_count)
 {
-	atomic_t *mpts = &per_cpu(max_prio_tasks, cpu);
-	int tasks = atomic_read(mpts) + task_count;
+	unsigned int *mpts = &per_cpu(max_prio_tasks, cpu);
+	int tasks = *mpts + task_count;
 
 	p->schedtune_max_prio = task_count > 0;
 	if (tasks >= 0)
-		atomic_set(mpts, tasks);
+		*mpts = tasks;
 }
 
 static inline bool
@@ -746,14 +746,12 @@ void schedtune_exit_task(struct task_struct *tsk)
 int schedtune_cpu_boost(int cpu)
 {
 	struct boost_groups *bg;
-	atomic_t *mpts;
 	u64 now;
 
 	if (schedtune_input_timeout())
 		return 0;
 
-	mpts = &per_cpu(max_prio_tasks, cpu);
-	if (atomic_read(mpts))
+	if (per_cpu(max_prio_tasks, cpu))
 		return schedtune_boost_max;
 
 	bg = &per_cpu(cpu_boost_groups, cpu);
