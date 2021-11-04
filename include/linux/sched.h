@@ -3633,4 +3633,10 @@ void cpufreq_add_update_util_hook(int cpu, struct update_util_data *data,
 void cpufreq_remove_update_util_hook(int cpu);
 #endif /* CONFIG_CPU_FREQ */
 
+#ifdef CONFIG_CPU_FREQ_GOV_SCHEDUTIL
+void schedutil_interactive_update(void);
+#else
+static inline void schedutil_interactive_update(void) {}
+#endif /* CONFIG_CPU_FREQ_GOV_SCHEDUTIL */
+
 #endif

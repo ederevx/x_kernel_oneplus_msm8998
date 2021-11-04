@@ -33,6 +33,9 @@ unsigned long boosted_cpu_util(int cpu);
 #define MIN_RATE_LIMIT_NS (UP_RATE_DELAY_NS < DOWN_RATE_DELAY_NS ? \
 		UP_RATE_DELAY_NS : DOWN_RATE_DELAY_NS)
 
+/* Time after last frame commit before timeout */
+#define SCHEDUTIL_INTERACTIVE_NS (1000 * NSEC_PER_MSEC)
+
 struct sugov_policy {
 	struct cpufreq_policy *policy;
 
@@ -72,7 +75,30 @@ struct sugov_cpu {
 
 static DEFINE_PER_CPU(struct sugov_cpu, sugov_cpu);
 
+static u64 schedutil_interactive_ts __cacheline_aligned_in_smp = 0;
+static DEFINE_RAW_SPINLOCK(interactive_lock);
+
 /************************ Governor internals ***********************/
+
+static inline bool schedutil_interactive_timeout(void)
+{
+	return ((sched_clock() - schedutil_interactive_ts) > 
+			SCHEDUTIL_INTERACTIVE_NS);
+}
+
+static inline void __schedutil_interactive_update(void)
+{
+	/* We only need to update once at a time */
+	if (raw_spin_trylock(&interactive_lock)) {
+		schedutil_interactive_ts = sched_clock();
+		raw_spin_unlock(&interactive_lock);
+	}
+}
+
+void schedutil_interactive_update(void)
+{
+	__schedutil_interactive_update();
+}
 
 static bool sugov_should_update_freq(struct sugov_policy *sg_policy, u64 time)
 {
@@ -110,16 +136,17 @@ static bool sugov_should_update_freq(struct sugov_policy *sg_policy, u64 time)
 static bool sugov_up_down_rate_limit(struct sugov_policy *sg_policy, u64 time,
 				     unsigned int next_freq)
 {
+	bool interactive = !schedutil_interactive_timeout();
 	s64 delta_ns;
 
 	delta_ns = time - sg_policy->last_freq_update_time;
 
 	if (next_freq > sg_policy->next_freq &&
-	    delta_ns < UP_RATE_DELAY_NS)
+	    delta_ns < (interactive ? UP_RATE_DELAY_NS : DOWN_RATE_DELAY_NS))
 			return true;
 
 	if (next_freq < sg_policy->next_freq &&
-	    delta_ns < DOWN_RATE_DELAY_NS)
+	    delta_ns < (interactive ? DOWN_RATE_DELAY_NS : UP_RATE_DELAY_NS))
 			return true;
 
 	return false;

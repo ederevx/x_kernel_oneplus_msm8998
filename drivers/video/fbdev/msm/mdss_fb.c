@@ -3771,6 +3771,9 @@ int mdss_fb_atomic_commit(struct fb_info *info,
 		goto end;
 	}
 
+	/* Inform schedutil prior to the commit */
+	schedutil_interactive_update();
+
 	commit_v1 = &commit->commit_v1;
 	if (commit_v1->flags & MDP_VALIDATE_LAYER) {
 		ret = mdss_fb_wait_for_kickoff(mfd);
