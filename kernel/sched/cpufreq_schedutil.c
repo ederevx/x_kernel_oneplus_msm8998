@@ -33,8 +33,8 @@ unsigned long boosted_cpu_util(int cpu);
 #define MIN_RATE_LIMIT_NS (UP_RATE_DELAY_NS < DOWN_RATE_DELAY_NS ? \
 		UP_RATE_DELAY_NS : DOWN_RATE_DELAY_NS)
 
-/* Time after last frame commit before timeout */
-#define SCHEDUTIL_INTERACTIVE_NS (1000 * NSEC_PER_MSEC)
+/* Time after last interactive update before timeout */
+#define SCHEDUTIL_INTERACTIVE_NS (100 * NSEC_PER_MSEC)
 
 struct sugov_policy {
 	struct cpufreq_policy *policy;
