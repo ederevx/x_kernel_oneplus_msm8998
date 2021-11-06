@@ -5144,6 +5144,14 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 	 */
 	util_est_enqueue(&rq->cfs, p);
 
+	/*
+	 * If in_iowait is set and the task is of importance, retain 
+	 * schedutil's interactiveness and prevent timeout.
+	 */
+	if (p->in_iowait && (!IS_ENABLED(CONFIG_SCHED_TUNE) || 
+	    p->schedtune_enqueued || p->schedtune_max_prio))
+		schedutil_interactive_update();
+
 	for_each_sched_entity(se) {
 		if (se->on_rq)
 			break;
