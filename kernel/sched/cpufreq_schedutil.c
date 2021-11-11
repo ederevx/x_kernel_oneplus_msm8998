@@ -34,7 +34,7 @@ unsigned long boosted_cpu_util(int cpu);
 		UP_RATE_DELAY_NS : DOWN_RATE_DELAY_NS)
 
 /* Time after last interactive update before timeout */
-#define SCHEDUTIL_INTERACTIVE_NS (100 * NSEC_PER_MSEC)
+#define SUGOV_INTERACTIVE_JIFFIES msecs_to_jiffies(100)
 
 struct sugov_policy {
 	struct cpufreq_policy *policy;
@@ -75,29 +75,13 @@ struct sugov_cpu {
 
 static DEFINE_PER_CPU(struct sugov_cpu, sugov_cpu);
 
-static u64 schedutil_interactive_ts __cacheline_aligned_in_smp = 0;
-static DEFINE_RAW_SPINLOCK(interactive_lock);
-
 /************************ Governor internals ***********************/
 
-static inline bool schedutil_interactive_timeout(void)
-{
-	return ((sched_clock() - schedutil_interactive_ts) > 
-			SCHEDUTIL_INTERACTIVE_NS);
-}
-
-static inline void __schedutil_interactive_update(void)
-{
-	/* We only need to update once at a time */
-	if (raw_spin_trylock(&interactive_lock)) {
-		schedutil_interactive_ts = sched_clock();
-		raw_spin_unlock(&interactive_lock);
-	}
-}
+DECLARE_LW_TIMEOUT(sugov_interactive_lwt, SUGOV_INTERACTIVE_JIFFIES);
 
 void schedutil_interactive_update(void)
 {
-	__schedutil_interactive_update();
+	sugov_interactive_lwt_update_ts();
 }
 
 static bool sugov_should_update_freq(struct sugov_policy *sg_policy, u64 time)
@@ -136,9 +120,12 @@ static bool sugov_should_update_freq(struct sugov_policy *sg_policy, u64 time)
 static bool sugov_up_down_rate_limit(struct sugov_policy *sg_policy, u64 time,
 				     unsigned int next_freq)
 {
-	bool interactive = !schedutil_interactive_timeout();
+	bool interactive;
 	s64 delta_ns;
 
+	sugov_interactive_lwt_update();
+
+	interactive = !sugov_interactive_lwt_check();
 	delta_ns = time - sg_policy->last_freq_update_time;
 
 	if (next_freq > sg_policy->next_freq &&
@@ -155,11 +142,11 @@ static bool sugov_up_down_rate_limit(struct sugov_policy *sg_policy, u64 time,
 static bool sugov_update_next_freq(struct sugov_policy *sg_policy, u64 time,
 				   unsigned int next_freq)
 {
-        if (sugov_up_down_rate_limit(sg_policy, time, next_freq)) {
-                /* Reset cached freq as next_freq isn't changed */
-                sg_policy->cached_raw_freq = 0;
-                return false;
-        }
+	if (sugov_up_down_rate_limit(sg_policy, time, next_freq)) {
+		/* Reset cached freq as next_freq isn't changed */
+		sg_policy->cached_raw_freq = 0;
+		return false;
+	}
 
 	if (sg_policy->next_freq == next_freq)
 		return false;

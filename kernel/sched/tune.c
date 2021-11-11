@@ -111,11 +111,15 @@ __schedtune_accept_deltas(int nrg_delta, int cap_delta,
 #define SCHEDTUNE_BOOST_HOLD_NS 50000000ULL
 
 /* Allow boosting to occur within this time frame from last input update */
-#define SCHEDTUNE_INPUT_NS (5000 * NSEC_PER_MSEC)
+#define SCHEDTUNE_INPUT_JIFFIES msecs_to_jiffies(5000)
 
 /* Keep track of interactivity */
-static u64 schedtune_input_ts __cacheline_aligned_in_smp = 0;
-static DEFINE_RAW_SPINLOCK(input_lock);
+DECLARE_LW_TIMEOUT(schedtune_input_lwt, SCHEDTUNE_INPUT_JIFFIES);
+
+void schedtune_input_update(void)
+{
+	schedtune_input_lwt_update_ts();
+}
 
 /*
  * EAS scheduler tunables for task groups.
@@ -258,12 +262,6 @@ DEFINE_PER_CPU(struct boost_groups, cpu_boost_groups);
 static inline bool schedtune_boost_timeout(u64 now, u64 ts)
 {
 	return ((now - ts) > SCHEDTUNE_BOOST_HOLD_NS);
-}
-
-static inline bool schedtune_input_timeout(void)
-{
-	return ((sched_clock() - schedtune_input_ts) > 
-			SCHEDTUNE_INPUT_NS);
 }
 
 static inline bool
@@ -748,7 +746,9 @@ int schedtune_cpu_boost(int cpu)
 	struct boost_groups *bg;
 	u64 now;
 
-	if (schedtune_input_timeout())
+	schedtune_input_lwt_update();
+
+	if (schedtune_input_lwt_check())
 		return 0;
 
 	if (per_cpu(max_prio_tasks, cpu))
@@ -776,7 +776,7 @@ int schedtune_task_boost(struct task_struct *p)
 	if (prio == ST_LOW_PRIO)
 		return 0;
 
-	if (schedtune_input_timeout())
+	if (schedtune_input_lwt_check())
 		return 0;
 
 	if (prio == ST_MAX_PRIO)
@@ -802,7 +802,7 @@ int schedtune_task_boost_rcu_locked(struct task_struct *p)
 	if (prio == ST_LOW_PRIO)
 		return 0;
 
-	if (schedtune_input_timeout())
+	if (schedtune_input_lwt_check())
 		return 0;
 
 	if (prio == ST_MAX_PRIO)
@@ -829,7 +829,7 @@ int schedtune_prefer_idle(struct task_struct *p)
 	if (prio == ST_LOW_PRIO)
 		return 0;
 
-	if (schedtune_input_timeout())
+	if (schedtune_input_lwt_check())
 		return 0;
 
 	if (prio == ST_MAX_PRIO)
@@ -944,24 +944,10 @@ static struct cftype files[] = {
 	{ }	/* terminate */
 };
 
-static inline void __schedtune_input_update(void)
-{
-	/* We only need to update once at a time */
-	if (raw_spin_trylock(&input_lock)) {
-		schedtune_input_ts = sched_clock();
-		raw_spin_unlock(&input_lock);
-	}
-}
-
-void schedtune_input_update(void)
-{
-	__schedtune_input_update();
-}
-
 static void schedtune_input_event(struct input_handle *handle,
 		unsigned int type, unsigned int code, int value)
 {
-	__schedtune_input_update();
+	schedtune_input_lwt_update_ts();
 }
 
 static int schedtune_input_connect(struct input_handler *handler,
