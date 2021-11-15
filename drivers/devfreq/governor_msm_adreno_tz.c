@@ -411,7 +411,7 @@ static int tz_get_target_freq(struct devfreq *devfreq, unsigned long *freq,
 	*freq = devfreq->profile->freq_table[level];
 	/* Keep schedtune functions awake when GPU is running higher than min */
 	if (*freq > devfreq->min_freq && devfreq->previous_freq > devfreq->min_freq)
-		schedtune_input_update();
+		schedtune_interactive_update();
 
 	return 0;
 }

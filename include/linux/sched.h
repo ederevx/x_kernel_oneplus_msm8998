@@ -2703,9 +2703,9 @@ static inline void sched_autogroup_exit_task(struct task_struct *p) { }
 #endif
 
 #if defined(CONFIG_SCHED_TUNE) && defined(CONFIG_CGROUP_SCHEDTUNE)
-void schedtune_input_update(void);
+void schedtune_interactive_update(void);
 #else
-static inline void schedtune_input_update(void) { }
+static inline void schedtune_interactive_update(void) { }
 #endif
 
 extern int yield_to(struct task_struct *p, bool preempt);
@@ -3639,5 +3639,11 @@ void schedutil_interactive_update(void);
 #else
 static inline void schedutil_interactive_update(void) {}
 #endif /* CONFIG_CPU_FREQ_GOV_SCHEDUTIL */
+
+static inline void sched_interactive_update(void)
+{
+	schedtune_interactive_update();
+	schedutil_interactive_update();
+}
 
 #endif

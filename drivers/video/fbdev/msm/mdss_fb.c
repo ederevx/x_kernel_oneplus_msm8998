@@ -2279,6 +2279,9 @@ static int mdss_fb_blank_unblank(struct msm_fb_data_type *mfd)
 		return 0;
 	}
 
+	/* Update scheduler's interactive timestamps */
+	sched_interactive_update();
+
 	if (mfd->mdp.on_fnc) {
 		struct mdss_panel_info *panel_info = mfd->panel_info;
 		struct fb_var_screeninfo *var = &mfd->fbi->var;

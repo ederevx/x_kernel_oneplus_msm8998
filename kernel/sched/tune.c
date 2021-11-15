@@ -111,14 +111,14 @@ __schedtune_accept_deltas(int nrg_delta, int cap_delta,
 #define SCHEDTUNE_BOOST_HOLD_NS 50000000ULL
 
 /* Allow boosting to occur within this time frame from last input update */
-#define SCHEDTUNE_INPUT_JIFFIES msecs_to_jiffies(5000)
+#define SCHEDTUNE_INTERACTIVE_JIFFIES msecs_to_jiffies(5000)
 
 /* Keep track of interactivity */
-DECLARE_LW_TIMEOUT(schedtune_input_lwt, SCHEDTUNE_INPUT_JIFFIES);
+DECLARE_LW_TIMEOUT(schedtune_interactive_lwt, SCHEDTUNE_INTERACTIVE_JIFFIES);
 
-void schedtune_input_update(void)
+void schedtune_interactive_update(void)
 {
-	schedtune_input_lwt_update_ts();
+	schedtune_interactive_lwt_update_ts();
 }
 
 /*
@@ -746,9 +746,9 @@ int schedtune_cpu_boost(int cpu)
 	struct boost_groups *bg;
 	u64 now;
 
-	schedtune_input_lwt_update();
+	schedtune_interactive_lwt_update();
 
-	if (schedtune_input_lwt_check())
+	if (schedtune_interactive_lwt_check())
 		return 0;
 
 	if (per_cpu(max_prio_tasks, cpu))
@@ -776,7 +776,7 @@ int schedtune_task_boost(struct task_struct *p)
 	if (prio == ST_LOW_PRIO)
 		return 0;
 
-	if (schedtune_input_lwt_check())
+	if (schedtune_interactive_lwt_check())
 		return 0;
 
 	if (prio == ST_MAX_PRIO)
@@ -802,7 +802,7 @@ int schedtune_task_boost_rcu_locked(struct task_struct *p)
 	if (prio == ST_LOW_PRIO)
 		return 0;
 
-	if (schedtune_input_lwt_check())
+	if (schedtune_interactive_lwt_check())
 		return 0;
 
 	if (prio == ST_MAX_PRIO)
@@ -829,7 +829,7 @@ int schedtune_prefer_idle(struct task_struct *p)
 	if (prio == ST_LOW_PRIO)
 		return 0;
 
-	if (schedtune_input_lwt_check())
+	if (schedtune_interactive_lwt_check())
 		return 0;
 
 	if (prio == ST_MAX_PRIO)
@@ -944,13 +944,13 @@ static struct cftype files[] = {
 	{ }	/* terminate */
 };
 
-static void schedtune_input_event(struct input_handle *handle,
+static void schedtune_interactive_event(struct input_handle *handle,
 		unsigned int type, unsigned int code, int value)
 {
-	schedtune_input_lwt_update_ts();
+	schedtune_interactive_lwt_update_ts();
 }
 
-static int schedtune_input_connect(struct input_handler *handler,
+static int schedtune_interactive_connect(struct input_handler *handler,
 		struct input_dev *dev, const struct input_device_id *id)
 {
 	struct input_handle *handle;
@@ -980,7 +980,7 @@ err2:
 	return error;
 }
 
-static void schedtune_input_disconnect(struct input_handle *handle)
+static void schedtune_interactive_disconnect(struct input_handle *handle)
 {
 	input_close_device(handle);
 	input_unregister_handle(handle);
@@ -1013,10 +1013,10 @@ static const struct input_device_id schedtune_ids[] = {
 	{ },
 };
 
-static struct input_handler schedtune_input_handler = {
-	.event		   = schedtune_input_event,
-	.connect	   = schedtune_input_connect,
-	.disconnect	   = schedtune_input_disconnect,
+static struct input_handler schedtune_interactive_handler = {
+	.event		   = schedtune_interactive_event,
+	.connect	   = schedtune_interactive_connect,
+	.disconnect	   = schedtune_interactive_disconnect,
 	.name		   = "schedtune_h",
 	.id_table	   = schedtune_ids,
 };
@@ -1366,7 +1366,7 @@ schedtune_init(void)
 
 #ifdef CONFIG_CGROUP_SCHEDTUNE
 	schedtune_init_cgroups();
-	if (input_register_handler(&schedtune_input_handler))
+	if (input_register_handler(&schedtune_interactive_handler))
 		pr_err("Failed to register schedtune input handler\n");
 #else
 	pr_info("schedtune: configured to support global boosting only\n");
