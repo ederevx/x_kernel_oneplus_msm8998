@@ -34,7 +34,7 @@ unsigned long boosted_cpu_util(int cpu);
 		UP_RATE_DELAY_NS : DOWN_RATE_DELAY_NS)
 
 /* Time after last interactive update before timeout */
-#define SUGOV_INTERACTIVE_JIFFIES msecs_to_jiffies(100)
+#define SUGOV_INTERACTIVE_JIFFIES msecs_to_jiffies(200)
 
 struct sugov_policy {
 	struct cpufreq_policy *policy;
