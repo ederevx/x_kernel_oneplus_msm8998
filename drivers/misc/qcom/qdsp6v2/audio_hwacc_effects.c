@@ -122,6 +122,9 @@ static int audio_effects_shared_ioctl(struct file *file, unsigned cmd,
 
 		mutex_lock(&effects->lock);
 
+		effects->config.output.num_channels = 8;
+		effects->config.output.bits_per_sample = 24;
+
 		rc = q6asm_open_read_write_v2(effects->ac,
 					FORMAT_LINEAR_PCM,
 					FORMAT_MULTI_CHANNEL_LINEAR_PCM,
