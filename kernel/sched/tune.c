@@ -252,12 +252,11 @@ struct boost_groups {
 		/* Timestamp of boost activation */
 		u64 ts;
 	} group[BOOSTGROUPS_COUNT];
-	/* CPU's boost group locking */
-	raw_spinlock_t lock;
 };
 
 /* Boost groups affecting each CPU in the system */
 DEFINE_PER_CPU(struct boost_groups, cpu_boost_groups);
+DEFINE_PER_CPU(raw_spinlock_t, cpu_bg_lock);
 
 static inline bool schedtune_boost_timeout(u64 now, u64 ts)
 {
@@ -390,11 +389,11 @@ schedtune_prio_val(struct task_struct *p)
 	unsigned short adj = READ_ONCE(p->signal->oom_score_adj);
 
 	/* This task is of utmost priority, inform caller */
-	if (adj < 200 || task_has_rt_policy(p))
+	if (adj < 200)
 		return ST_MAX_PRIO;
 
 	/* Normally evaluate the high priority task */
-	if (adj < 300)
+	if (adj < 300 || task_has_rt_policy(p))
 		return ST_HIGH_PRIO;
 
 	/* Skip tasks that are not really prioritized */
@@ -403,6 +402,7 @@ schedtune_prio_val(struct task_struct *p)
 
 /* Count of RUNNABLE max priority tasks on a CPU */
 DEFINE_PER_CPU(unsigned int, max_prio_tasks);
+DEFINE_PER_CPU(raw_spinlock_t, max_prio_lock);
 
 static inline void
 schedtune_max_prio_tasks_update(struct task_struct *p, int cpu, int task_count)
@@ -410,7 +410,6 @@ schedtune_max_prio_tasks_update(struct task_struct *p, int cpu, int task_count)
 	unsigned int *mpts = &per_cpu(max_prio_tasks, cpu);
 	int tasks = *mpts + task_count;
 
-	p->schedtune_max_prio = task_count > 0;
 	if (tasks >= 0)
 		*mpts = tasks;
 }
@@ -471,7 +470,7 @@ schedtune_tasks_update(struct task_struct *p, int cpu, int idx, int task_count)
  */
 void schedtune_enqueue_task(struct task_struct *p, int cpu)
 {
-	struct boost_groups *bg = &per_cpu(cpu_boost_groups, cpu);
+	raw_spinlock_t *bg_lock = &per_cpu(cpu_bg_lock, cpu);
 	unsigned long irq_flags;
 	struct schedtune *st;
 	int idx, prio;
@@ -495,7 +494,12 @@ void schedtune_enqueue_task(struct task_struct *p, int cpu)
 
 	/* Avoid boostgroups and be enqueued within a special list */
 	if (prio == ST_MAX_PRIO) {
+		raw_spinlock_t *mpts_lock = &per_cpu(max_prio_lock, cpu);
+
+		p->schedtune_max_prio = true;
+		raw_spin_lock_irqsave(mpts_lock, irq_flags);
 		schedtune_max_prio_tasks_update(p, cpu, ENQUEUE_TASK);
+		raw_spin_unlock_irqrestore(mpts_lock, irq_flags);
 		return;
 	}
 
@@ -517,7 +521,7 @@ void schedtune_enqueue_task(struct task_struct *p, int cpu)
 	 * interrupt to be disabled to avoid race conditions for example on
 	 * do_exit()::cgroup_exit() and task migration.
 	 */
-	raw_spin_lock_irqsave(&bg->lock, irq_flags);
+	raw_spin_lock_irqsave(bg_lock, irq_flags);
 	rcu_read_lock();
 
 	st = task_schedtune(p);
@@ -526,7 +530,7 @@ void schedtune_enqueue_task(struct task_struct *p, int cpu)
 	schedtune_tasks_update(p, cpu, idx, ENQUEUE_TASK);
 
 	rcu_read_unlock();
-	raw_spin_unlock_irqrestore(&bg->lock, irq_flags);
+	raw_spin_unlock_irqrestore(bg_lock, irq_flags);
 }
 
 int schedtune_allow_attach(struct cgroup_subsys_state *css,
@@ -541,6 +545,7 @@ int schedtune_can_attach(struct cgroup_taskset *tset)
 	struct task_struct *task;
 	struct cgroup_subsys_state *css;
 	struct boost_groups *bg;
+	raw_spinlock_t *bg_lock;
 	struct rq_flags rf;
 	unsigned int cpu;
 	struct rq *rq;
@@ -551,6 +556,7 @@ int schedtune_can_attach(struct cgroup_taskset *tset)
 	u64 now;
 	bool boosted;
 	bool enqueued;
+	bool max_prio;
 
 	if (!unlikely(schedtune_initialized))
 		return 0;
@@ -569,14 +575,21 @@ int schedtune_can_attach(struct cgroup_taskset *tset)
 			continue;
 		}
 
-		prio = schedtune_prio_val(task);
-
 		cpu = cpu_of(rq);
 
+		prio = schedtune_prio_val(task);
+		max_prio = prio == ST_MAX_PRIO;
+
 		/* Max prio tasks must spend less time as much as possible */
-		if (task->schedtune_max_prio != (prio == ST_MAX_PRIO))
-			schedtune_max_prio_tasks_update(task, cpu, (prio != ST_MAX_PRIO) ?
+		if (max_prio != task->schedtune_max_prio) {
+			raw_spinlock_t *mpts_lock = &per_cpu(max_prio_lock, cpu);
+
+			task->schedtune_max_prio = max_prio;
+			raw_spin_lock(mpts_lock);
+			schedtune_max_prio_tasks_update(task, cpu, !max_prio ?
 			        DEQUEUE_TASK : ENQUEUE_TASK);
+			raw_spin_unlock(mpts_lock);
+		}
 
 		enqueued = task->schedtune_enqueued;
 		boosted = prio == ST_HIGH_PRIO;
@@ -591,8 +604,10 @@ int schedtune_can_attach(struct cgroup_taskset *tset)
 		 * Boost group accouting is protected by a per-cpu lock and requires
 		 * interrupt to be disabled to avoid race conditions on...
 		 */
+		bg_lock = &per_cpu(cpu_bg_lock, cpu);
+		raw_spin_lock(bg_lock);
+
 		bg = &per_cpu(cpu_boost_groups, cpu);
-		raw_spin_lock(&bg->lock);
 
 		dst_bg = css_st(css)->idx;
 		src_bg = task_schedtune(task)->idx;
@@ -609,7 +624,7 @@ int schedtune_can_attach(struct cgroup_taskset *tset)
 		 * it is unnecessary to go past this point.
 		 */
 		if (unlikely(dst_bg == src_bg) || !(enqueued || boosted)) {
-			raw_spin_unlock(&bg->lock);
+			raw_spin_unlock(bg_lock);
 			unlock_rq_of(rq, task, &rf);
 			continue;
 		}
@@ -642,7 +657,7 @@ int schedtune_can_attach(struct cgroup_taskset *tset)
 		/* Force boost group re-evaluation at next boost check */
 		bg->boost_ts = now - SCHEDTUNE_BOOST_HOLD_NS;
 
-		raw_spin_unlock(&bg->lock);
+		raw_spin_unlock(bg_lock);
 		unlock_rq_of(rq, task, &rf);
 	}
 
@@ -663,7 +678,7 @@ void schedtune_cancel_attach(struct cgroup_taskset *tset)
  */
 void schedtune_dequeue_task(struct task_struct *p, int cpu)
 {
-	struct boost_groups *bg = &per_cpu(cpu_boost_groups, cpu);
+	raw_spinlock_t *bg_lock = &per_cpu(cpu_bg_lock, cpu);
 	unsigned long irq_flags;
 	struct schedtune *st;
 	int idx;
@@ -684,7 +699,12 @@ void schedtune_dequeue_task(struct task_struct *p, int cpu)
 
 	/* Max prio tasks are enqueued within a special list */
 	if (p->schedtune_max_prio) {
+		raw_spinlock_t *mpts_lock = &per_cpu(max_prio_lock, cpu);
+
+		p->schedtune_max_prio = false;
+		raw_spin_lock_irqsave(mpts_lock, irq_flags);
 		schedtune_max_prio_tasks_update(p, cpu, DEQUEUE_TASK);
+		raw_spin_unlock_irqrestore(mpts_lock, irq_flags);
 		return;
 	}
 
@@ -697,7 +717,7 @@ void schedtune_dequeue_task(struct task_struct *p, int cpu)
 	 * Boost group accouting is protected by a per-cpu lock and requires
 	 * interrupt to be disabled to avoid race conditions on...
 	 */
-	raw_spin_lock_irqsave(&bg->lock, irq_flags);
+	raw_spin_lock_irqsave(bg_lock, irq_flags);
 	rcu_read_lock();
 
 	st = task_schedtune(p);
@@ -706,7 +726,7 @@ void schedtune_dequeue_task(struct task_struct *p, int cpu)
 	schedtune_tasks_update(p, cpu, idx, DEQUEUE_TASK);
 
 	rcu_read_unlock();
-	raw_spin_unlock_irqrestore(&bg->lock, irq_flags);
+	raw_spin_unlock_irqrestore(bg_lock, irq_flags);
 }
 
 void schedtune_exit_task(struct task_struct *tsk)
@@ -725,6 +745,7 @@ void schedtune_exit_task(struct task_struct *tsk)
 
 	/* Max prio tasks are enqueued within a special list */
 	if (tsk->schedtune_max_prio) {
+		tsk->schedtune_max_prio = false;
 		schedtune_max_prio_tasks_update(tsk, cpu, DEQUEUE_TASK);
 	} else if (tsk->schedtune_enqueued) {
 		tsk->schedtune_enqueued = false;
@@ -1153,13 +1174,19 @@ static inline void
 schedtune_init_cgroups(void)
 {
 	struct boost_groups *bg;
+	raw_spinlock_t *bg_lock, *mpts_lock;
 	int cpu;
 
 	/* Initialize the per CPU boost groups */
 	for_each_possible_cpu(cpu) {
 		bg = &per_cpu(cpu_boost_groups, cpu);
 		memset(bg, 0, sizeof(struct boost_groups));
-		raw_spin_lock_init(&bg->lock);
+		bg_lock = &per_cpu(cpu_bg_lock, cpu);
+		raw_spin_lock_init(bg_lock);
+
+		per_cpu(max_prio_tasks, cpu) = 0;
+		mpts_lock = &per_cpu(max_prio_lock, cpu);
+		raw_spin_lock_init(mpts_lock);
 	}
 
 	pr_info("schedtune: configured to support %d boost groups\n",
