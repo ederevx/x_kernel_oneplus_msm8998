@@ -7,64 +7,77 @@
 #ifndef _LINUX_LWTIMEOUT_H
 #define _LINUX_LWTIMEOUT_H
 
+struct lwtimeout {
+	unsigned long state;
+
+	/* Separate lockless state from lock */
+	rwlock_t lock ____cacheline_aligned_in_smp;
+
+	raw_spinlock_t expires_lock;
+	u64 expires;
+	u64 duration;
+};
+
+enum lwt_flags {
+	TIMEOUT_EXPIRED = 0
+};
+
 /**
  * lwtimeout_check - check if the timeout had occured
- *
- * Can be called by the user as _name##_check();
- * i.e. if 'cpufreq_timeout' is declared, then use cpufreq_timeout_check();
+ * @lwt: timeout to be evaluated
  */
-#define lwtimeout_check(_name) READ_ONCE(_name##_state)
+static inline bool lwtimeout_check(struct lwtimeout *lwt) 
+{
+	return test_bit(TIMEOUT_EXPIRED, &lwt->state);
+}
 
 /**
  * lwtimeout_update - evaluate the timeout state value
- *
- * Can be called by the user as _name##_update();
- * i.e. if 'cpufreq_timeout' is declared, then use cpufreq_timeout_update();
+ * @lwt: timeout to be modified
  */
-#define lwtimeout_update(_name, _expires)				\
-	do {															\
-		if (write_trylock(&_name##_lock)) {						\
-			WRITE_ONCE(_name##_state, (jiffies - _name##_ts > _expires));	\
-			write_unlock(&_name##_lock);							\
-		}														\
-	} while (0)
+static inline void lwtimeout_update(struct lwtimeout *lwt)
+{
+	if (lwtimeout_check(lwt))
+		return;
+
+	if (write_trylock(&lwt->lock)) {
+		if (ktime_get_ns() > lwt->expires)
+			set_bit(TIMEOUT_EXPIRED, &lwt->state);
+		write_unlock(&lwt->lock);
+	}
+}
 
 /**
- * lwtimeout_update_ts - update the timeout's timestamp and clear timeout
- *
- * Can be called by the user as _name##_update_ts();
- * i.e. if 'cpufreq_timeout' is declared, then use cpufreq_timeout_update_ts();
+ * lwtimeout_update_expires - update the timeout's expires and clear timeout
+ * @lwt: timeout to be modified
  */
-#define lwtimeout_update_ts(_name)								\
-	do {															\
-		read_lock(&_name##_lock);							\
-		if (raw_spin_trylock(&_name##_ts_lock)) {						\
-			WRITE_ONCE(_name##_state, false);					\
-			_name##_ts = jiffies;									\
-			raw_spin_unlock(&_name##_ts_lock);					\
-		}																\
-		read_unlock(&_name##_lock);								\
-	} while (0)
+static inline void lwtimeout_update_expires(struct lwtimeout *lwt)
+{
+	read_lock(&lwt->lock);
+
+	if (lwtimeout_check(lwt))
+		clear_bit(TIMEOUT_EXPIRED, &lwt->state);
+
+	if (raw_spin_trylock(&lwt->expires_lock)) {
+		lwt->expires = ktime_get_ns() + lwt->duration;
+		raw_spin_unlock(&lwt->expires_lock);
+	}
+
+	read_unlock(&lwt->lock);
+}
 
 /**
- * DECLARE_LW_TIMEOUT - Defines and initializes all needed variables and 
- * functions static
+ * DEFINE_LW_TIMEOUT - defines a lightweight timeout structure
  * @_name: the name of the lwt structure to be made
- * @_expires: the structure's timeout in jiffies
- * 
- * This initializes the following functions to be used based upon the defined 
- * lwt macros:
- * 		lwtimeout_check -> _name##_check();
- * 		lwtimeout_update -> _name##_update();
- * 		lwtimeout_update_ts -> _name##_update_ts();
+ * @_expires: the structure's timeout in nanoseconds
  */
-#define DECLARE_LW_TIMEOUT(_name, _expires);	  					\
-	bool _name##_state = false;											\
-	DEFINE_RWLOCK(_name##_lock);								\
-	unsigned long _name##_ts = 0;											\
-	DEFINE_RAW_SPINLOCK(_name##_ts_lock);								\
-	static inline bool _name##_check(void) { return lwtimeout_check(_name); }		\
-	static inline void _name##_update(void) { lwtimeout_update(_name, _expires); }		\
-	static inline void _name##_update_ts(void) { lwtimeout_update_ts(_name); }
+#define DEFINE_LW_TIMEOUT(_name, _expires)		\
+	struct lwtimeout _name = {							\
+		.state = 0,									\
+		.lock = __RW_LOCK_UNLOCKED(_name.lock),			\
+		.expires_lock = __RAW_SPIN_LOCK_UNLOCKED(_name.expires_lock),	\
+		.expires = _expires,						\
+		.duration = _expires							\
+	}
 
 #endif /* _LINUX_LWTIMEOUT_H */
