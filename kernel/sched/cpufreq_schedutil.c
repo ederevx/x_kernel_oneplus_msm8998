@@ -34,7 +34,7 @@ unsigned long boosted_cpu_util(int cpu);
 		UP_RATE_DELAY_NS : DOWN_RATE_DELAY_NS)
 
 /* Time after last interactive update before timeout */
-#define SUGOV_INTERACTIVE_JIFFIES msecs_to_jiffies(200)
+#define SUGOV_INTERACTIVE_NS (200 * NSEC_PER_MSEC)
 
 struct sugov_policy {
 	struct cpufreq_policy *policy;
@@ -75,14 +75,9 @@ struct sugov_cpu {
 
 static DEFINE_PER_CPU(struct sugov_cpu, sugov_cpu);
 
+DEFINE_LW_TIMEOUT(sugov_interactive_lwt, SUGOV_INTERACTIVE_NS);
+
 /************************ Governor internals ***********************/
-
-DECLARE_LW_TIMEOUT(sugov_interactive_lwt, SUGOV_INTERACTIVE_JIFFIES);
-
-void schedutil_interactive_update(void)
-{
-	sugov_interactive_lwt_update_ts();
-}
 
 static bool sugov_should_update_freq(struct sugov_policy *sg_policy, u64 time)
 {
@@ -123,9 +118,9 @@ static bool sugov_up_down_rate_limit(struct sugov_policy *sg_policy, u64 time,
 	bool interactive;
 	s64 delta_ns;
 
-	sugov_interactive_lwt_update();
+	lwtimeout_update(&sugov_interactive_lwt);
 
-	interactive = !sugov_interactive_lwt_check();
+	interactive = !lwtimeout_check(&sugov_interactive_lwt);
 	delta_ns = time - sg_policy->last_freq_update_time;
 
 	if (next_freq > sg_policy->next_freq &&

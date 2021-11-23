@@ -111,15 +111,10 @@ __schedtune_accept_deltas(int nrg_delta, int cap_delta,
 #define SCHEDTUNE_BOOST_HOLD_NS 50000000ULL
 
 /* Allow boosting to occur within this time frame from last input update */
-#define SCHEDTUNE_INTERACTIVE_JIFFIES msecs_to_jiffies(5000)
+#define SCHEDTUNE_INTERACTIVE_NS (5000 * NSEC_PER_MSEC)
 
 /* Keep track of interactivity */
-DECLARE_LW_TIMEOUT(schedtune_interactive_lwt, SCHEDTUNE_INTERACTIVE_JIFFIES);
-
-void schedtune_interactive_update(void)
-{
-	schedtune_interactive_lwt_update_ts();
-}
+DEFINE_LW_TIMEOUT(schedtune_interactive_lwt, SCHEDTUNE_INTERACTIVE_NS);
 
 /*
  * EAS scheduler tunables for task groups.
@@ -741,9 +736,9 @@ int schedtune_cpu_boost(int cpu)
 	struct boost_groups *bg;
 	u64 now;
 
-	schedtune_interactive_lwt_update();
+	lwtimeout_update(&schedtune_interactive_lwt);
 
-	if (schedtune_interactive_lwt_check())
+	if (lwtimeout_check(&schedtune_interactive_lwt))
 		return 0;
 
 	if (per_cpu(max_prio_tasks, cpu))
@@ -773,7 +768,7 @@ int schedtune_task_boost(struct task_struct *p)
 	if (prio == ST_LOW_PRIO)
 		return 0;
 
-	if (schedtune_interactive_lwt_check())
+	if (lwtimeout_check(&schedtune_interactive_lwt))
 		return 0;
 
 	if (prio == ST_MAX_PRIO)
@@ -805,7 +800,7 @@ int schedtune_task_boost_rcu_locked(struct task_struct *p)
 	if (prio == ST_LOW_PRIO)
 		return 0;
 
-	if (schedtune_interactive_lwt_check())
+	if (lwtimeout_check(&schedtune_interactive_lwt))
 		return 0;
 
 	if (prio == ST_MAX_PRIO)
@@ -832,7 +827,7 @@ int schedtune_prefer_idle(struct task_struct *p)
 	if (prio == ST_LOW_PRIO)
 		return 0;
 
-	if (schedtune_interactive_lwt_check())
+	if (lwtimeout_check(&schedtune_interactive_lwt))
 		return 0;
 
 	if (prio == ST_MAX_PRIO)
@@ -950,7 +945,7 @@ static struct cftype files[] = {
 static void schedtune_interactive_event(struct input_handle *handle,
 		unsigned int type, unsigned int code, int value)
 {
-	schedtune_interactive_lwt_update_ts();
+	lwtimeout_update_expires(&schedtune_interactive_lwt);
 }
 
 static int schedtune_interactive_connect(struct input_handler *handler,

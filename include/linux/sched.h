@@ -51,7 +51,6 @@ struct sched_param {
 #include <linux/resource.h>
 #include <linux/timer.h>
 #include <linux/hrtimer.h>
-#include <linux/lwtimeout.h>
 #include <linux/kcov.h>
 #include <linux/task_io_accounting.h>
 #include <linux/latencytop.h>
@@ -2703,7 +2702,15 @@ static inline void sched_autogroup_exit_task(struct task_struct *p) { }
 #endif
 
 #if defined(CONFIG_SCHED_TUNE) && defined(CONFIG_CGROUP_SCHEDTUNE)
-void schedtune_interactive_update(void);
+#include <linux/lwtimeout.h>
+
+extern struct lwtimeout schedtune_interactive_lwt;
+
+static inline void schedtune_interactive_update(void)
+{
+	lwtimeout_update_expires(&schedtune_interactive_lwt);
+}
+
 #else
 static inline void schedtune_interactive_update(void) { }
 #endif
@@ -3635,7 +3642,15 @@ void cpufreq_remove_update_util_hook(int cpu);
 #endif /* CONFIG_CPU_FREQ */
 
 #ifdef CONFIG_CPU_FREQ_GOV_SCHEDUTIL
-void schedutil_interactive_update(void);
+#include <linux/lwtimeout.h>
+
+extern struct lwtimeout sugov_interactive_lwt;
+
+static inline void schedutil_interactive_update(void)
+{
+	lwtimeout_update_expires(&sugov_interactive_lwt);
+}
+
 #else
 static inline void schedutil_interactive_update(void) {}
 #endif /* CONFIG_CPU_FREQ_GOV_SCHEDUTIL */
