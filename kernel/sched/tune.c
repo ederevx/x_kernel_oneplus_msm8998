@@ -423,21 +423,6 @@ schedtune_update_timestamp(struct task_struct *p)
 	return task_has_rt_policy(p);
 }
 
-static inline int
-schedtune_task_boost_raw(struct task_struct *p)
-{
-	struct schedtune *st;
-	int task_boost;
-
-	/* Get task boost value */
-	rcu_read_lock();
-	st = task_schedtune(p);
-	task_boost = st->boost;
-	rcu_read_unlock();
-
-	return task_boost;
-}
-
 static inline void
 schedtune_tasks_update(struct task_struct *p, int cpu, int idx, int task_count)
 {
@@ -508,10 +493,6 @@ void schedtune_enqueue_task(struct task_struct *p, int cpu)
 		return;
 
 	if (p->schedtune_enqueued)
-		return;
-
-	/* Only enqueue boosted tasks */
-	if (!schedtune_task_boost_raw(p))
 		return;
 
 	p->schedtune_enqueued = true;
@@ -612,18 +593,11 @@ int schedtune_can_attach(struct cgroup_taskset *tset)
 		dst_bg = css_st(css)->idx;
 		src_bg = task_schedtune(task)->idx;
 
-		/* Check if destination is boosted */
-		boosted *= !!bg->group[dst_bg].boost;
-
 		/*
 		 * Current task is not changing boostgroup, which can
 		 * happen when the new hierarchy is in use.
-		 * 
-		 * Another scenario is that there are no changes to be 
-		 * made to the boost groups due to lack of boost value, wherein 
-		 * it is unnecessary to go past this point.
 		 */
-		if (unlikely(dst_bg == src_bg) || !(enqueued || boosted)) {
+		if (unlikely(dst_bg == src_bg)) {
 			raw_spin_unlock(bg_lock);
 			unlock_rq_of(rq, task, &rf);
 			continue;
@@ -787,6 +761,8 @@ int schedtune_cpu_boost(int cpu)
 
 int schedtune_task_boost(struct task_struct *p)
 {
+	struct schedtune *st;
+	int task_boost;
 	int prio;
 
 	if (!unlikely(schedtune_initialized))
@@ -803,7 +779,13 @@ int schedtune_task_boost(struct task_struct *p)
 	if (prio == ST_MAX_PRIO)
 		return schedtune_boost_max;
 
-	return schedtune_task_boost_raw(p);
+	/* Get task boost value */
+	rcu_read_lock();
+	st = task_schedtune(p);
+	task_boost = st->boost;
+	rcu_read_unlock();
+
+	return task_boost;
 }
 
 /*  The same as schedtune_task_boost except assuming the caller has the rcu read
