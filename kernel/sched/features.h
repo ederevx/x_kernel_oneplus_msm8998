@@ -123,7 +123,7 @@
  * If disabled, this behaviour will only apply to tasks of the
  * RT class.
  */
-#define SCHED_FEAT_SCHEDTUNE_BOOST_HOLD_ALL 1
+#define SCHED_FEAT_SCHEDTUNE_BOOST_HOLD_ALL 0
 
 /*
  * UtilEstimation. Use estimated CPU utilization.
