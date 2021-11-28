@@ -5149,7 +5149,8 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 	 * schedutil's interactiveness and prevent timeout.
 	 */
 	if (p->in_iowait && (!IS_ENABLED(CONFIG_SCHED_TUNE) || 
-	    p->schedtune_enqueued || p->schedtune_max_prio))
+	    test_bit(ST_FLAG_ENQUEUED, &p->schedtune_flags) || 
+		test_bit(ST_FLAG_MAX_PRIO, &p->schedtune_flags)))
 		schedutil_interactive_update();
 
 	for_each_sched_entity(se) {

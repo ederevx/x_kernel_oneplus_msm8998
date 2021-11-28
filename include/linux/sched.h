@@ -1629,8 +1629,7 @@ struct task_struct {
 	struct task_group *sched_task_group;
 #endif
 #ifdef CONFIG_SCHED_TUNE
-	bool schedtune_enqueued;
-	bool schedtune_max_prio;
+	unsigned long schedtune_flags;
 #endif
 	struct sched_dl_entity dl;
 
@@ -2703,6 +2702,12 @@ static inline void sched_autogroup_exit_task(struct task_struct *p) { }
 
 #if defined(CONFIG_SCHED_TUNE) && defined(CONFIG_CGROUP_SCHEDTUNE)
 #include <linux/lwtimeout.h>
+
+/* SchedTune task flags' bit nr */
+enum st_flags {
+	ST_FLAG_ENQUEUED = 0,
+	ST_FLAG_MAX_PRIO
+};
 
 extern struct lwtimeout schedtune_interactive_lwt;
 

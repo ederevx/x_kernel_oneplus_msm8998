@@ -467,7 +467,7 @@ void schedtune_enqueue_task(struct task_struct *p, int cpu)
 	if (p->flags & PF_EXITING)
 		return;
 
-	if (p->schedtune_max_prio)
+	if (test_bit(ST_FLAG_MAX_PRIO, &p->schedtune_flags))
 		return;
 
 	prio = schedtune_prio_val(p);
@@ -476,7 +476,7 @@ void schedtune_enqueue_task(struct task_struct *p, int cpu)
 	if (prio == ST_MAX_PRIO) {
 		raw_spinlock_t *mpts_lock = &per_cpu(max_prio_lock, cpu);
 
-		p->schedtune_max_prio = true;
+		set_bit(ST_FLAG_MAX_PRIO, &p->schedtune_flags);
 		raw_spin_lock_irqsave(mpts_lock, irq_flags);
 		schedtune_max_prio_tasks_update(p, cpu, ENQUEUE_TASK);
 		raw_spin_unlock_irqrestore(mpts_lock, irq_flags);
@@ -487,10 +487,8 @@ void schedtune_enqueue_task(struct task_struct *p, int cpu)
 	if (prio == ST_LOW_PRIO)
 		return;
 
-	if (p->schedtune_enqueued)
+	if (test_and_set_bit(ST_FLAG_ENQUEUED, &p->schedtune_flags))
 		return;
-
-	p->schedtune_enqueued = true;
 
 	/*
 	 * Boost group accouting is protected by a per-cpu lock and requires
@@ -557,17 +555,17 @@ int schedtune_can_attach(struct cgroup_taskset *tset)
 		max_prio = prio == ST_MAX_PRIO;
 
 		/* Max prio tasks must spend less time as much as possible */
-		if (max_prio != task->schedtune_max_prio) {
+		if (max_prio != test_bit(ST_FLAG_MAX_PRIO, &task->schedtune_flags)) {
 			raw_spinlock_t *mpts_lock = &per_cpu(max_prio_lock, cpu);
 
-			task->schedtune_max_prio = max_prio;
+			change_bit(ST_FLAG_MAX_PRIO, &task->schedtune_flags);
 			raw_spin_lock(mpts_lock);
 			schedtune_max_prio_tasks_update(task, cpu, !max_prio ?
 			        DEQUEUE_TASK : ENQUEUE_TASK);
 			raw_spin_unlock(mpts_lock);
 		}
 
-		enqueued = task->schedtune_enqueued;
+		enqueued = test_bit(ST_FLAG_ENQUEUED, &task->schedtune_flags);
 		boosted = prio == ST_HIGH_PRIO;
 
 		/* Skip if we won't de/enqueue the task from/to a boostgroup */
@@ -605,7 +603,7 @@ int schedtune_can_attach(struct cgroup_taskset *tset)
 
 		/* Change enqueued state according to destination */
 		if (enqueued != boosted)
-			task->schedtune_enqueued = boosted;
+			change_bit(ST_FLAG_ENQUEUED, &task->schedtune_flags);
 
 		/* Move task from src to dst boost group */
 		if (enqueued) {
@@ -667,20 +665,18 @@ void schedtune_dequeue_task(struct task_struct *p, int cpu)
 		return;
 
 	/* Max prio tasks are enqueued within a special list */
-	if (p->schedtune_max_prio) {
+	if (test_bit(ST_FLAG_MAX_PRIO, &p->schedtune_flags)) {
 		raw_spinlock_t *mpts_lock = &per_cpu(max_prio_lock, cpu);
 
-		p->schedtune_max_prio = false;
+		clear_bit(ST_FLAG_MAX_PRIO, &p->schedtune_flags);
 		raw_spin_lock_irqsave(mpts_lock, irq_flags);
 		schedtune_max_prio_tasks_update(p, cpu, DEQUEUE_TASK);
 		raw_spin_unlock_irqrestore(mpts_lock, irq_flags);
 		return;
 	}
 
-	if (!p->schedtune_enqueued)
+	if (!test_and_clear_bit(ST_FLAG_ENQUEUED, &p->schedtune_flags))
 		return;
-
-	p->schedtune_enqueued = false;
 
 	/*
 	 * Boost group accouting is protected by a per-cpu lock and requires
@@ -713,12 +709,9 @@ void schedtune_exit_task(struct task_struct *tsk)
 	cpu = cpu_of(rq);
 
 	/* Max prio tasks are enqueued within a special list */
-	if (tsk->schedtune_max_prio) {
-		tsk->schedtune_max_prio = false;
+	if (test_and_clear_bit(ST_FLAG_MAX_PRIO, &tsk->schedtune_flags)) {
 		schedtune_max_prio_tasks_update(tsk, cpu, DEQUEUE_TASK);
-	} else if (tsk->schedtune_enqueued) {
-		tsk->schedtune_enqueued = false;
-
+	} else if (test_and_clear_bit(ST_FLAG_ENQUEUED, &tsk->schedtune_flags)) {
 		rcu_read_lock();
 
 		st = task_schedtune(tsk);
