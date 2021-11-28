@@ -374,7 +374,7 @@ schedtune_boostgroup_update(int idx, int boost)
 
 enum schedtune_prio {
 	ST_LOW_PRIO = 0,
-	ST_HIGH_PRIO,
+	ST_NORMAL_PRIO,
 	ST_MAX_PRIO
 };
 
@@ -384,12 +384,12 @@ schedtune_prio_val(struct task_struct *p)
 	unsigned short adj = READ_ONCE(p->signal->oom_score_adj);
 
 	/* This task is of utmost priority, inform caller */
-	if (adj < 200)
+	if (!adj)
 		return ST_MAX_PRIO;
 
-	/* Normally evaluate the high priority task */
-	if (adj < 300 || task_has_rt_policy(p))
-		return ST_HIGH_PRIO;
+	/* Normally evaluate the normal priority task */
+	if (adj < 900)
+		return ST_NORMAL_PRIO;
 
 	/* Skip tasks that are not really prioritized */
 	return ST_LOW_PRIO;
@@ -566,7 +566,7 @@ int schedtune_can_attach(struct cgroup_taskset *tset)
 		}
 
 		enqueued = test_bit(ST_FLAG_ENQUEUED, &task->schedtune_flags);
-		boosted = prio == ST_HIGH_PRIO;
+		boosted = prio == ST_NORMAL_PRIO;
 
 		/* Skip if we won't de/enqueue the task from/to a boostgroup */
 		if (!(enqueued || boosted)) {
