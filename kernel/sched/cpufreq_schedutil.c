@@ -118,8 +118,6 @@ static bool sugov_up_down_rate_limit(struct sugov_policy *sg_policy, u64 time,
 	bool interactive;
 	s64 delta_ns;
 
-	lwtimeout_update(&sugov_interactive_lwt);
-
 	interactive = !lwtimeout_check(&sugov_interactive_lwt);
 	delta_ns = time - sg_policy->last_freq_update_time;
 
@@ -148,6 +146,7 @@ static bool sugov_update_next_freq(struct sugov_policy *sg_policy, u64 time,
 
 	sg_policy->next_freq = next_freq;
 	sg_policy->last_freq_update_time = time;
+	lwtimeout_update(&sugov_interactive_lwt);
 
 	return true;
 }
