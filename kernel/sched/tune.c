@@ -467,10 +467,14 @@ void schedtune_enqueue_task(struct task_struct *p, int cpu)
 	if (p->flags & PF_EXITING)
 		return;
 
-	if (test_bit(ST_FLAG_MAX_PRIO, &p->schedtune_flags))
+	prio = schedtune_prio_val(p);
+
+	/* Skip low prio tasks */
+	if (prio == ST_LOW_PRIO)
 		return;
 
-	prio = schedtune_prio_val(p);
+	if (test_bit(ST_FLAG_MAX_PRIO, &p->schedtune_flags))
+		return;
 
 	/* Avoid boostgroups and be enqueued within a special list */
 	if (prio == ST_MAX_PRIO) {
@@ -482,10 +486,6 @@ void schedtune_enqueue_task(struct task_struct *p, int cpu)
 		raw_spin_unlock_irqrestore(mpts_lock, irq_flags);
 		return;
 	}
-
-	/* Skip low prio tasks */
-	if (prio == ST_LOW_PRIO)
-		return;
 
 	if (test_and_set_bit(ST_FLAG_ENQUEUED, &p->schedtune_flags))
 		return;
@@ -729,8 +729,6 @@ int schedtune_cpu_boost(int cpu)
 	struct boost_groups *bg;
 	u64 now;
 
-	lwtimeout_update(&schedtune_interactive_lwt);
-
 	if (lwtimeout_check(&schedtune_interactive_lwt))
 		return 0;
 
@@ -741,8 +739,10 @@ int schedtune_cpu_boost(int cpu)
 	now = sched_clock_cpu(cpu);
 
 	/* Check to see if we have a hold in effect */
-	if (schedtune_boost_timeout(now, bg->boost_ts))
+	if (schedtune_boost_timeout(now, bg->boost_ts)) {
 		schedtune_cpu_update(cpu, now);
+		lwtimeout_update(&schedtune_interactive_lwt);
+	}
 
 	return bg->boost_max;
 }
