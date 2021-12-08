@@ -9,18 +9,39 @@
 
 struct lwtimeout {
 	unsigned long state;
-
-	/* Separate lockless state from lock */
-	rwlock_t lock ____cacheline_aligned_in_smp;
-
+	atomic_t soft_lock;
+	rwlock_t lock;
 	raw_spinlock_t expires_lock;
 	u64 expires;
 	u64 duration;
 };
 
 enum lwt_flags {
-	TIMEOUT_EXPIRED = 0
+	TIMEOUT_EXPIRED = 0,
+	TIMEOUT_LOCKED
 };
+
+/**
+ * lwtimeout_update - disable timeout updates by acquiring a soft lock
+ * @lwt: timeout to be modified
+ */
+static inline void lwtimeout_lock(struct lwtimeout *lwt)
+{
+	if (atomic_inc_return(&lwt->soft_lock) == 1)
+		set_bit(TIMEOUT_LOCKED, &lwt->state);
+}
+
+/**
+ * lwtimeout_update - retrieve locks to re-enable timeout updates
+ * @lwt: timeout to be modified
+ */
+static inline void lwtimeout_unlock(struct lwtimeout *lwt)
+{
+	if (atomic_read(&lwt->soft_lock) > 0) {
+		if (atomic_dec_return(&lwt->soft_lock) == 0)
+			clear_bit(TIMEOUT_LOCKED, &lwt->state);
+	}
+}
 
 /**
  * lwtimeout_check - check if the timeout had occured
@@ -38,6 +59,9 @@ static inline bool lwtimeout_check(struct lwtimeout *lwt)
 static inline void lwtimeout_update(struct lwtimeout *lwt)
 {
 	if (lwtimeout_check(lwt))
+		return;
+
+	if (test_bit(TIMEOUT_LOCKED, &lwt->state))
 		return;
 
 	if (write_trylock(&lwt->lock)) {
@@ -74,6 +98,7 @@ static inline void lwtimeout_update_expires(struct lwtimeout *lwt)
 #define DEFINE_LW_TIMEOUT(_name, _expires)		\
 	struct lwtimeout _name = {							\
 		.state = 0,									\
+		.soft_lock = ATOMIC_INIT(0),			\
 		.lock = __RW_LOCK_UNLOCKED(_name.lock),			\
 		.expires_lock = __RAW_SPIN_LOCK_UNLOCKED(_name.expires_lock),	\
 		.expires = _expires,						\
