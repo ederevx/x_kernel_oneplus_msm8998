@@ -2711,13 +2711,9 @@ enum st_flags {
 
 extern struct lwtimeout schedtune_interactive_lwt;
 
-static inline void schedtune_interactive_update(void)
-{
-	lwtimeout_update_expires(&schedtune_interactive_lwt);
-}
-
+#define schedtune_interactive(cmd) lwtimeout_##cmd(&schedtune_interactive_lwt)
 #else
-static inline void schedtune_interactive_update(void) { }
+#define schedtune_interactive(cmd) do { } while (0)
 #endif
 
 extern int yield_to(struct task_struct *p, bool preempt);
@@ -3651,19 +3647,16 @@ void cpufreq_remove_update_util_hook(int cpu);
 
 extern struct lwtimeout sugov_interactive_lwt;
 
-static inline void schedutil_interactive_update(void)
-{
-	lwtimeout_update_expires(&sugov_interactive_lwt);
-}
-
+#define schedutil_interactive(cmd) lwtimeout_##cmd(&sugov_interactive_lwt)
 #else
+#define schedutil_interactive(cmd) do { } while (0)
 static inline void schedutil_interactive_update(void) {}
 #endif /* CONFIG_CPU_FREQ_GOV_SCHEDUTIL */
 
-static inline void sched_interactive_update(void)
-{
-	schedtune_interactive_update();
-	schedutil_interactive_update();
-}
+#define sched_interactive(cmd)		\
+	do {								\
+		schedtune_interactive(cmd);			\
+		schedutil_interactive(cmd);		\
+	} while (0)
 
 #endif

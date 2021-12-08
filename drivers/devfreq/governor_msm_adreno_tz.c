@@ -157,6 +157,14 @@ void compute_work_load(struct devfreq_dev_status *stats,
 	acc_relative_busy += busy;
 
 	spin_unlock(&sample_lock);
+
+	/* Keep sched interactive accordingly when GPU is sufficiently busy */
+	if (busy) {
+		if (((busy * 100) / stats->total_time) >= 10)
+			sched_interactive(update_expires);
+		else
+			schedutil_interactive(update_expires);
+	}
 }
 
 /* Trap into the TrustZone, and call funcs there. */
@@ -409,9 +417,6 @@ static int tz_get_target_freq(struct devfreq *devfreq, unsigned long *freq,
 	}
 
 	*freq = devfreq->profile->freq_table[level];
-	/* Keep schedtune functions awake when GPU is running higher than min */
-	if (*freq > devfreq->min_freq && devfreq->previous_freq > devfreq->min_freq)
-		schedtune_interactive_update();
 
 	return 0;
 }

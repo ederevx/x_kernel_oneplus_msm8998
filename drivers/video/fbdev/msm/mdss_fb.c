@@ -2279,8 +2279,10 @@ static int mdss_fb_blank_unblank(struct msm_fb_data_type *mfd)
 		return 0;
 	}
 
+	sched_interactive(lock);
+
 	/* Update scheduler's interactive timestamps */
-	sched_interactive_update();
+	sched_interactive(update_expires);
 
 	if (mfd->mdp.on_fnc) {
 		struct mdss_panel_info *panel_info = mfd->panel_info;
@@ -2340,6 +2342,8 @@ static int mdss_fb_blank_unblank(struct msm_fb_data_type *mfd)
 	}
 
 error:
+	sched_interactive(unlock);
+
 	return ret;
 }
 
@@ -3459,6 +3463,11 @@ static int __mdss_fb_sync_buf_done_callback(struct notifier_block *p,
 	mfd = container_of(sync_pt_data, struct msm_fb_data_type,
 		mdp_sync_pt_data);
 
+	sched_interactive(lock);
+
+	/* Update schedutil for each async frame update */
+	schedutil_interactive(update_expires);
+
 	switch (event) {
 	case MDP_NOTIFY_FRAME_BEGIN:
 		if (mfd->idle_time && !mod_delayed_work(system_wq,
@@ -3513,6 +3522,8 @@ static int __mdss_fb_sync_buf_done_callback(struct notifier_block *p,
 		mdss_fb_release_kickoff(mfd);
 		break;
 	}
+
+	sched_interactive(unlock);
 
 	return ret;
 }
@@ -3775,7 +3786,7 @@ int mdss_fb_atomic_commit(struct fb_info *info,
 	}
 
 	/* Inform schedutil prior to the commit */
-	schedutil_interactive_update();
+	schedutil_interactive(update_expires);
 
 	commit_v1 = &commit->commit_v1;
 	if (commit_v1->flags & MDP_VALIDATE_LAYER) {
@@ -5368,6 +5379,8 @@ int mdss_fb_do_ioctl(struct fb_info *info, unsigned int cmd,
 		return -EINVAL;
 	}
 
+	sched_interactive(lock);
+
 	atomic_inc(&mfd->ioctl_ref_cnt);
 
 	mdss_fb_power_setting_idle(mfd);
@@ -5438,6 +5451,8 @@ int mdss_fb_do_ioctl(struct fb_info *info, unsigned int cmd,
 exit:
 	if (!atomic_dec_return(&mfd->ioctl_ref_cnt))
 		wake_up_all(&mfd->ioctl_q);
+
+	sched_interactive(unlock);
 
 	return ret;
 }

@@ -535,6 +535,8 @@ int schedtune_can_attach(struct cgroup_taskset *tset)
 	if (unlikely(!schedtune_initialized))
 		return 0;
 
+	sched_interactive(lock);
+
 	cgroup_taskset_for_each(task, css, tset) {
 
 		/*
@@ -627,6 +629,8 @@ int schedtune_can_attach(struct cgroup_taskset *tset)
 		raw_spin_unlock(bg_lock);
 		unlock_rq_of(rq, task, &rf);
 	}
+
+	sched_interactive(unlock);
 
 	return 0;
 }
@@ -729,7 +733,7 @@ int schedtune_cpu_boost(int cpu)
 	struct boost_groups *bg;
 	u64 now;
 
-	if (lwtimeout_check(&schedtune_interactive_lwt))
+	if (schedtune_interactive(check))
 		return 0;
 
 	if (per_cpu(max_prio_tasks, cpu))
@@ -739,10 +743,8 @@ int schedtune_cpu_boost(int cpu)
 	now = sched_clock_cpu(cpu);
 
 	/* Check to see if we have a hold in effect */
-	if (schedtune_boost_timeout(now, bg->boost_ts)) {
+	if (schedtune_boost_timeout(now, bg->boost_ts))
 		schedtune_cpu_update(cpu, now);
-		lwtimeout_update(&schedtune_interactive_lwt);
-	}
 
 	return bg->boost_max;
 }
@@ -761,7 +763,7 @@ int schedtune_task_boost(struct task_struct *p)
 	if (prio == ST_LOW_PRIO)
 		return 0;
 
-	if (lwtimeout_check(&schedtune_interactive_lwt))
+	if (schedtune_interactive(check))
 		return 0;
 
 	if (prio == ST_MAX_PRIO)
@@ -793,7 +795,7 @@ int schedtune_task_boost_rcu_locked(struct task_struct *p)
 	if (prio == ST_LOW_PRIO)
 		return 0;
 
-	if (lwtimeout_check(&schedtune_interactive_lwt))
+	if (schedtune_interactive(check))
 		return 0;
 
 	if (prio == ST_MAX_PRIO)
@@ -820,7 +822,7 @@ int schedtune_prefer_idle(struct task_struct *p)
 	if (prio == ST_LOW_PRIO)
 		return 0;
 
-	if (lwtimeout_check(&schedtune_interactive_lwt))
+	if (schedtune_interactive(check))
 		return 0;
 
 	if (prio == ST_MAX_PRIO)
@@ -938,7 +940,7 @@ static struct cftype files[] = {
 static void schedtune_interactive_event(struct input_handle *handle,
 		unsigned int type, unsigned int code, int value)
 {
-	lwtimeout_update_expires(&schedtune_interactive_lwt);
+	sched_interactive(update_expires);
 }
 
 static int schedtune_interactive_connect(struct input_handler *handler,

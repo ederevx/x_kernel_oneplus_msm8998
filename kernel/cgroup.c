@@ -2978,7 +2978,7 @@ static ssize_t __cgroup_procs_write(struct kernfs_open_file *of, char *buf,
 
 	if (!ret && !threadgroup && !strcmp(of->kn->parent->name, "top-app") &&
 	    	task_is_zygote(tsk->parent))
-		sched_interactive_update();
+		sched_interactive(update_expires);
 
 	put_task_struct(tsk);
 	goto out_unlock_threadgroup;

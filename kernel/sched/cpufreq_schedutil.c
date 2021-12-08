@@ -118,7 +118,7 @@ static bool sugov_up_down_rate_limit(struct sugov_policy *sg_policy, u64 time,
 	bool interactive;
 	s64 delta_ns;
 
-	interactive = !lwtimeout_check(&sugov_interactive_lwt);
+	interactive = !schedutil_interactive(check);
 	delta_ns = time - sg_policy->last_freq_update_time;
 
 	if (next_freq > sg_policy->next_freq &&
@@ -146,7 +146,6 @@ static bool sugov_update_next_freq(struct sugov_policy *sg_policy, u64 time,
 
 	sg_policy->next_freq = next_freq;
 	sg_policy->last_freq_update_time = time;
-	lwtimeout_update(&sugov_interactive_lwt);
 
 	return true;
 }
@@ -285,6 +284,8 @@ static void sugov_update_single(struct update_util_data *hook, u64 time,
 	if (!sugov_should_update_freq(sg_policy, time))
 		return;
 
+	sched_interactive(lock);
+
 	busy = sugov_cpu_is_busy(sg_cpu);
 
 	if (flags & SCHED_CPUFREQ_DL) {
@@ -316,6 +317,11 @@ static void sugov_update_single(struct update_util_data *hook, u64 time,
 		sugov_deferred_update(sg_policy, time, next_f);
 		raw_spin_unlock(&sg_policy->update_lock);
 	}
+
+	sched_interactive(unlock);
+
+	/* Update post-lock to make sure the freq update completes */
+	sched_interactive(update);
 }
 
 static unsigned int sugov_next_freq_shared(struct sugov_cpu *sg_cpu, u64 time)
@@ -363,6 +369,8 @@ static void sugov_update_shared(struct update_util_data *hook, u64 time,
 	unsigned long util, max;
 	unsigned int next_f;
 
+	sched_interactive(lock);
+
 	sugov_get_util(&util, &max, time, sg_cpu->cpu);
 
 	raw_spin_lock(&sg_policy->update_lock);
@@ -386,6 +394,11 @@ static void sugov_update_shared(struct update_util_data *hook, u64 time,
 	}
 
 	raw_spin_unlock(&sg_policy->update_lock);
+
+	sched_interactive(unlock);
+
+	/* Update post-lock to make sure the freq update completes */
+	sched_interactive(update);
 }
 
 static void sugov_work(struct kthread_work *work)

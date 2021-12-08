@@ -169,8 +169,10 @@ long kgsl_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	long ret;
 
+	sched_interactive(lock);
+
 	if (cmd == IOCTL_KGSL_GPU_COMMAND)
-		schedutil_interactive_update();
+		schedutil_interactive(update_expires);
 
 	if (cmd == IOCTL_KGSL_GPU_COMMAND &&
 	    READ_ONCE(device->state) != KGSL_STATE_ACTIVE)
@@ -186,12 +188,14 @@ long kgsl_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 
 	if (ret == -ENOIOCTLCMD) {
 		if (is_compat_task() && device->ftbl->compat_ioctl != NULL)
-			return device->ftbl->compat_ioctl(dev_priv, cmd, arg);
+			ret = device->ftbl->compat_ioctl(dev_priv, cmd, arg);
 		else if (device->ftbl->ioctl != NULL)
-			return device->ftbl->ioctl(dev_priv, cmd, arg);
-
-		KGSL_DRV_INFO(device, "invalid ioctl code 0x%08X\n", cmd);
+			ret = device->ftbl->ioctl(dev_priv, cmd, arg);
+		else
+			KGSL_DRV_INFO(device, "invalid ioctl code 0x%08X\n", cmd);
 	}
+
+	sched_interactive(unlock);
 
 	return ret;
 }

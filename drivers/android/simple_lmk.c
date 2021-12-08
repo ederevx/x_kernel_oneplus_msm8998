@@ -190,9 +190,6 @@ static void scan_and_kill(void)
 	int i, nr_to_kill, nr_found = 0;
 	unsigned long pages_found;
 
-	/* Retain scheduler response */
-	sched_interactive_update();
-
 	/* Populate the victims array with tasks sorted by adj and then size */
 	pages_found = find_victims(&nr_found);
 	if (unlikely(!pages_found)) {
@@ -226,9 +223,6 @@ static void scan_and_kill(void)
 	nr_victims = nr_to_kill;
 	write_unlock(&mm_free_lock);
 
-	/* Retain scheduler response */
-	sched_interactive_update();
-
 	/* Kill the victims */
 	for (i = 0; i < nr_to_kill; i++) {
 		static const struct sched_param sched_zero_prio;
@@ -238,6 +232,9 @@ static void scan_and_kill(void)
 		pr_info("Killing %s with adj %d to free %lu KiB\n", vtsk->comm,
 			vtsk->signal->oom_score_adj,
 			victim->size << (PAGE_SHIFT - 10));
+
+		/* Retain scheduler response */
+		sched_interactive(update_expires);
 
 		/* Accelerate the victim's death by forcing the kill signal */
 		do_send_sig_info(SIGKILL, SEND_SIG_FORCED, vtsk, true);
@@ -260,9 +257,6 @@ static void scan_and_kill(void)
 		/* Finally release the victim's task lock acquired earlier */
 		task_unlock(vtsk);
 	}
-
-	/* Retain scheduler response */
-	sched_interactive_update();
 
 	/* Wait until all the victims die or until the timeout is reached */
 	if (!wait_for_completion_timeout(&reclaim_done, RECLAIM_EXPIRES))
@@ -291,7 +285,10 @@ static int simple_lmk_reclaim_thread(void *data)
 			set_current_state(TASK_RUNNING);
 		} while (unlikely(!atomic_read(&needs_reclaim)));
 
+		sched_interactive(lock);
 		scan_and_kill();
+		sched_interactive(unlock);
+
 		atomic_set_release(&needs_reclaim, 0);
 	}
 

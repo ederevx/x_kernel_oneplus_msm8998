@@ -5151,7 +5151,7 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 	if (p->in_iowait && (!IS_ENABLED(CONFIG_SCHED_TUNE) || 
 	    test_bit(ST_FLAG_ENQUEUED, &p->schedtune_flags) || 
 		test_bit(ST_FLAG_MAX_PRIO, &p->schedtune_flags)))
-		schedutil_interactive_update();
+		schedutil_interactive(update_expires);
 
 	for_each_sched_entity(se) {
 		if (se->on_rq)
@@ -7242,6 +7242,9 @@ static int select_energy_cpu_brute(struct task_struct *p, int prev_cpu,
 	schedstat_inc(p, se.statistics.nr_wakeups_secb_attempts);
 	schedstat_inc(this_rq(), eas_stats.secb_attempts);
 
+	/* Prevent changes in-between schedtune values */
+	sched_interactive(lock);
+
 	boosted = task_is_boosted(p);
 #ifdef CONFIG_CGROUP_SCHEDTUNE
 	prefer_idle = schedtune_prefer_idle(p) > 0;
@@ -7327,6 +7330,8 @@ static int select_energy_cpu_brute(struct task_struct *p, int prev_cpu,
 
 unlock:
 	rcu_read_unlock();
+
+	sched_interactive(unlock);
 
 	return target_cpu;
 }
@@ -9852,6 +9857,8 @@ more_balance:
 			goto no_move;
 		}
 
+		sched_interactive(lock);
+
 		update_rq_clock(busiest);
 
 		/*
@@ -9880,6 +9887,8 @@ more_balance:
 			attach_tasks(&env);
 			ld_moved += cur_ld_moved;
 		}
+
+		sched_interactive(unlock);
 
 		local_irq_restore(rf.flags);
 

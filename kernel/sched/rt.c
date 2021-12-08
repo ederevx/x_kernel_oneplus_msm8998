@@ -1967,9 +1967,11 @@ static int find_lowest_rq(struct task_struct *task, int sync)
 	 * lowest priority tasks in the system.
 	 */
 
+	sched_interactive(lock);
 	boosted = schedtune_task_boost(task) > 0;
 	prefer_idle = schedtune_prefer_idle(task) > 0;
 	if(boosted || prefer_idle) {
+		sched_interactive(unlock);
 		return find_best_rt_target(task, cpu, lowest_mask, boosted, prefer_idle);
 	} else {
 		/* Now we want to elect the best one based on on our affinity
@@ -1997,6 +1999,7 @@ static int find_lowest_rq(struct task_struct *task, int sync)
 					if (!curr || (schedtune_task_boost(curr) == 0
 					    && schedtune_prefer_idle(curr) == 0)) {
 						rcu_read_unlock();
+						sched_interactive(unlock);
 						return this_cpu;
 					}
 				}
@@ -2011,12 +2014,14 @@ static int find_lowest_rq(struct task_struct *task, int sync)
 					if(!curr || (schedtune_task_boost(curr) == 0
 						     && schedtune_prefer_idle(curr) == 0)) {
 						rcu_read_unlock();
+						sched_interactive(unlock);
 						return best_cpu;
 					}
 				}
 			}
 		}
 		rcu_read_unlock();
+		sched_interactive(unlock);
 
 		/* And finally, if there were no matches within the domains just
 		 * give the caller *something* to work with from the compatible
