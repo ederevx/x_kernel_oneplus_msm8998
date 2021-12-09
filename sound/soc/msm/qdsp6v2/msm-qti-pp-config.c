@@ -686,8 +686,8 @@ static void msm_qti_pp_asphere_init_state(void)
 		asphere_state.port_id[i] = -1;
 		asphere_state.copp_idx[i] = -1;
 	}
-	asphere_state.enabled = 0;
-	asphere_state.strength = 0;
+	asphere_state.enabled = 1;
+	asphere_state.strength = 200;
 	asphere_state.mode = 0;
 	asphere_state.version = 0;
 	asphere_state.enabled_prev = 0;
@@ -830,34 +830,6 @@ static int msm_qti_pp_asphere_get(struct snd_kcontrol *kcontrol,
 static int msm_qti_pp_asphere_set(struct snd_kcontrol *kcontrol,
 			struct snd_ctl_elem_value *ucontrol)
 {
-	int32_t enable = ucontrol->value.integer.value[0];
-	int32_t strength = ucontrol->value.integer.value[1];
-	int i;
-
-	pr_debug("%s, enable %u, strength %u\n", __func__, enable, strength);
-
-	msm_qti_pp_asphere_init_state();
-
-	if (enable == 0 || enable == 1) {
-		asphere_state.enabled_prev = asphere_state.enabled;
-		asphere_state.enabled = enable;
-	}
-
-	if (strength >= 0 && strength <= 1000) {
-		asphere_state.strength_prev = asphere_state.strength;
-		asphere_state.strength = strength;
-	}
-
-	if (asphere_state.strength != asphere_state.strength_prev ||
-		asphere_state.enabled != asphere_state.enabled_prev) {
-		for (i = 0; i < AFE_MAX_PORTS; i++) {
-			if (asphere_state.port_id[i] >= 0)
-				msm_qti_pp_asphere_send_params(
-					asphere_state.port_id[i],
-					asphere_state.copp_idx[i],
-					false);
-		}
-	}
 	return 0;
 }
 

@@ -222,13 +222,12 @@ static void msm_pcm_routing_cfg_pp(int port_id, int copp_idx, int topology,
 		}
 		break;
 	case ADM_CMD_COPP_OPEN_TOPOLOGY_ID_AUDIOSPHERE:
+	default:
 		pr_debug("%s: TOPOLOGY_ID_AUDIOSPHERE\n", __func__);
 		rc = msm_qti_pp_asphere_init(port_id, copp_idx);
 		if (rc < 0)
 			pr_err("%s: topo_id 0x%x, port %d, copp %d, rc %d\n",
 				__func__, topology, port_id, copp_idx, rc);
-		break;
-	default:
 		/* custom topology specific feature param handlers */
 		break;
 	}
@@ -256,10 +255,9 @@ static void msm_pcm_routing_deinit_pp(int port_id, int topology)
 		}
 		break;
 	case ADM_CMD_COPP_OPEN_TOPOLOGY_ID_AUDIOSPHERE:
+	default:
 		pr_debug("%s: TOPOLOGY_ID_AUDIOSPHERE\n", __func__);
 		msm_qti_pp_asphere_deinit(port_id);
-		break;
-	default:
 		/* custom topology specific feature deinit handlers */
 		break;
 	}
