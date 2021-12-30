@@ -636,6 +636,9 @@ int schedtune_task_boost_rcu_locked(struct task_struct *p)
 	if (unlikely(!schedtune_initialized))
 		return 0;
 
+	if (schedtune_interactive(check))
+		return 0;
+
 	/* Get task boost value */
 	st = task_schedtune(p);
 	task_boost = st->boost;
