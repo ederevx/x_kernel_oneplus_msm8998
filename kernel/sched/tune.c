@@ -273,7 +273,7 @@ schedtune_cpu_update(int cpu, u64 now)
 	int boost_max = INT_MIN;
 	int idx;
 
-	if (schedtune_interactive(check))
+	if (schedtune_interactive(check_timeout))
 		return;
 
 	schedtune_interactive(lock);
@@ -590,7 +590,7 @@ int schedtune_cpu_boost(int cpu)
 	struct boost_groups *bg;
 	u64 now;
 
-	if (schedtune_interactive(check))
+	if (schedtune_interactive(check_timeout))
 		return 0;
 
 	bg = &per_cpu(cpu_boost_groups, cpu);
@@ -599,7 +599,7 @@ int schedtune_cpu_boost(int cpu)
 	/* Check to see if we have a hold in effect */
 	if (schedtune_boost_timeout(now, bg->boost_ts)) {
 		schedtune_cpu_update(cpu, now);
-		schedtune_interactive(update);
+		schedtune_interactive(update_timeout);
 	}
 
 	return bg->boost_max;
@@ -613,7 +613,7 @@ int schedtune_task_boost(struct task_struct *p)
 	if (unlikely(!schedtune_initialized))
 		return 0;
 
-	if (schedtune_interactive(check))
+	if (schedtune_interactive(check_timeout))
 		return 0;
 
 	/* Get task boost value */
@@ -636,7 +636,7 @@ int schedtune_task_boost_rcu_locked(struct task_struct *p)
 	if (unlikely(!schedtune_initialized))
 		return 0;
 
-	if (schedtune_interactive(check))
+	if (schedtune_interactive(check_timeout))
 		return 0;
 
 	/* Get task boost value */
@@ -654,7 +654,7 @@ int schedtune_prefer_idle(struct task_struct *p)
 	if (unlikely(!schedtune_initialized))
 		return 0;
 
-	if (schedtune_interactive(check))
+	if (schedtune_interactive(check_timeout))
 		return 0;
 
 	/* Get prefer_idle value */
@@ -766,7 +766,7 @@ static struct cftype files[] = {
 static void schedtune_interactive_event(struct input_handle *handle,
 		unsigned int type, unsigned int code, int value)
 {
-	schedtune_interactive(update_expires);
+	schedtune_interactive(update_ts);
 }
 
 static int schedtune_interactive_connect(struct input_handler *handler,
