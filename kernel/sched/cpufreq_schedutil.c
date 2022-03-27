@@ -13,6 +13,7 @@
 
 #include <linux/cpufreq.h>
 #include <linux/kthread.h>
+#include <linux/sched.h>
 #include <linux/slab.h>
 #include <trace/events/power.h>
 
@@ -117,6 +118,10 @@ static bool sugov_up_down_rate_limit(struct sugov_policy *sg_policy, u64 time,
 	if (next_freq > sg_policy->next_freq &&
 	    delta_ns < UP_RATE_DELAY_NS)
 			return true;
+
+	/* Make it more probable to drop freq when load is uninteractive */
+	if (schedtune_interactive(check_timeout))
+		delta_ns *= 5;
 
 	if (next_freq < sg_policy->next_freq &&
 	    delta_ns < DOWN_RATE_DELAY_NS)
