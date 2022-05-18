@@ -683,9 +683,9 @@ static inline u64 calc_delta_fair(u64 delta, struct sched_entity *se)
 static u64 __sched_period(unsigned long nr_running)
 {
 	if (unlikely(nr_running > sched_nr_latency))
-		return nr_running * sysctl_sched_min_granularity;
+		return nr_running * sched_interactive_downscale(true, sysctl_sched_min_granularity);
 	else
-		return sysctl_sched_latency;
+		return sched_interactive_downscale(true, sysctl_sched_latency);
 }
 
 /*
@@ -3786,7 +3786,7 @@ static void check_spread(struct cfs_rq *cfs_rq, struct sched_entity *se)
 	if (d < 0)
 		d = -d;
 
-	if (d > 3*sysctl_sched_latency)
+	if (d > 3*sched_interactive_downscale(true, sysctl_sched_latency))
 		schedstat_inc(cfs_rq, nr_spread_over);
 #endif
 }
@@ -3807,7 +3807,7 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int initial)
 
 	/* sleeps up to a single latency don't count. */
 	if (!initial) {
-		unsigned long thresh = sysctl_sched_latency;
+		unsigned long thresh = sched_interactive_downscale(true, sysctl_sched_latency);
 
 		/*
 		 * Halve their sleep time's effect, to allow
@@ -4046,7 +4046,7 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 	 * narrow margin doesn't have to wait for a full slice.
 	 * This also mitigates buddy induced latencies under load.
 	 */
-	if (delta_exec < sysctl_sched_min_granularity)
+	if (delta_exec < sched_interactive_downscale(true, sysctl_sched_min_granularity))
 		return;
 
 	se = __pick_first_entity(cfs_rq);
@@ -4257,7 +4257,7 @@ static inline u64 default_cfs_period(void)
 
 static inline u64 sched_cfs_bandwidth_slice(void)
 {
-	return (u64)sysctl_sched_cfs_bandwidth_slice * NSEC_PER_USEC;
+	return (u64)sched_interactive_downscale(true, sysctl_sched_cfs_bandwidth_slice) * NSEC_PER_USEC;
 }
 
 /*
@@ -7510,7 +7510,7 @@ static void task_dead_fair(struct task_struct *p)
 static unsigned long
 wakeup_gran(struct sched_entity *curr, struct sched_entity *se)
 {
-	unsigned long gran = sysctl_sched_wakeup_granularity;
+	unsigned long gran = sched_interactive_downscale(true, sysctl_sched_wakeup_granularity);
 
 	/*
 	 * Since its curr running now, convert the gran from real-time
@@ -8066,7 +8066,7 @@ static int task_hot(struct task_struct *p, struct lb_env *env)
 
 	delta = rq_clock_task(env->src_rq) - p->se.exec_start;
 
-	return delta < (s64)sysctl_sched_migration_cost;
+	return delta < (s64)sched_interactive_upscale(true, sysctl_sched_migration_cost);
 }
 
 #ifdef CONFIG_NUMA_BALANCING
@@ -9840,7 +9840,7 @@ more_balance:
 		/*
 		 * Set loop_max when rq's lock is taken to prevent a race.
 		 */
-		env.loop_max = min(sysctl_sched_nr_migrate,
+		env.loop_max = min(sched_interactive_downscale(true, sysctl_sched_nr_migrate),
 							busiest->nr_running);
 
 		/*
@@ -10132,7 +10132,7 @@ static int idle_balance(struct rq *this_rq, struct rq_flags *rf)
 		return 0;
 
 	if (!energy_aware() &&
-	    (this_rq->avg_idle < sysctl_sched_migration_cost ||
+	    (this_rq->avg_idle < sched_interactive_upscale(true, sysctl_sched_migration_cost) ||
 	     !READ_ONCE(this_rq->rd->overload))) {
 		rcu_read_lock();
 		sd = rcu_dereference_check_sched_domain(this_rq->sd);
@@ -10582,7 +10582,7 @@ out:
 		 * reasonable floor to avoid funnies with rq->avg_idle.
 		 */
 		rq->max_idle_balance_cost =
-			max((u64)sysctl_sched_migration_cost, max_cost);
+			max((u64)sched_interactive_upscale(true, sysctl_sched_migration_cost), max_cost);
 	}
 	rcu_read_unlock();
 

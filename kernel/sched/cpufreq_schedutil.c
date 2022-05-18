@@ -120,7 +120,7 @@ static bool sugov_up_down_rate_limit(struct sugov_policy *sg_policy, u64 time,
 			return true;
 
 	/* Make it more probable to drop freq when load is uninteractive */
-	if (schedtune_interactive(check_timeout))
+	if (sched_interactive(check_timeout))
 		delta_ns *= 5;
 
 	if (next_freq < sg_policy->next_freq &&
@@ -301,6 +301,8 @@ static void sugov_update_single(struct update_util_data *hook, u64 time,
 		}
 	}
 
+	sched_interactive(lock);
+
 	/*
 	 * This code runs under rq->lock for the target CPU, so it won't run
 	 * concurrently on two different CPUs for the same target and it is not
@@ -313,6 +315,8 @@ static void sugov_update_single(struct update_util_data *hook, u64 time,
 		sugov_deferred_update(sg_policy, time, next_f);
 		raw_spin_unlock(&sg_policy->update_lock);
 	}
+
+	sched_interactive(unlock);
 }
 
 static unsigned int sugov_next_freq_shared(struct sugov_cpu *sg_cpu, u64 time)
@@ -362,6 +366,8 @@ static void sugov_update_shared(struct update_util_data *hook, u64 time,
 
 	sugov_get_util(&util, &max, time, sg_cpu->cpu);
 
+	sched_interactive(lock);
+
 	raw_spin_lock(&sg_policy->update_lock);
 
 	sg_cpu->util = util;
@@ -383,6 +389,8 @@ static void sugov_update_shared(struct update_util_data *hook, u64 time,
 	}
 
 	raw_spin_unlock(&sg_policy->update_lock);
+
+	sched_interactive(unlock);
 }
 
 static void sugov_work(struct kthread_work *work)

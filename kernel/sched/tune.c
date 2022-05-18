@@ -1,6 +1,5 @@
 #include <linux/cgroup.h>
 #include <linux/err.h>
-#include <linux/input.h>
 #include <linux/kernel.h>
 #include <linux/percpu.h>
 #include <linux/printk.h>
@@ -109,12 +108,6 @@ __schedtune_accept_deltas(int nrg_delta, int cap_delta,
 
 /* We hold schedtune boost in effect for at least this long */
 #define SCHEDTUNE_BOOST_HOLD_NS 50000000ULL
-
-/* Allow boosting to occur within this time frame from last input update */
-#define SCHEDTUNE_INPUT_NS (5000 * NSEC_PER_MSEC)
-
-/* Keep track of interactivity */
-DEFINE_LW_TIMEOUT(schedtune_interactive_lwt, SCHEDTUNE_INPUT_NS);
 
 /*
  * EAS scheduler tunables for task groups.
@@ -273,10 +266,10 @@ schedtune_cpu_update(int cpu, u64 now)
 	int boost_max = INT_MIN;
 	int idx;
 
-	if (schedtune_interactive(check_timeout))
+	if (sched_interactive(check_timeout))
 		return;
 
-	schedtune_interactive(lock);
+	sched_interactive(lock);
 
 	bg = &per_cpu(cpu_boost_groups, cpu);
 
@@ -303,7 +296,7 @@ schedtune_cpu_update(int cpu, u64 now)
 	bg->boost_max = boost_max;
 	bg->boost_ts = boost_ts;
 
-	schedtune_interactive(unlock);
+	sched_interactive(unlock);
 }
 
 static int
@@ -590,7 +583,7 @@ int schedtune_cpu_boost(int cpu)
 	struct boost_groups *bg;
 	u64 now;
 
-	if (schedtune_interactive(check_timeout))
+	if (sched_interactive(check_timeout))
 		return 0;
 
 	bg = &per_cpu(cpu_boost_groups, cpu);
@@ -599,7 +592,7 @@ int schedtune_cpu_boost(int cpu)
 	/* Check to see if we have a hold in effect */
 	if (schedtune_boost_timeout(now, bg->boost_ts)) {
 		schedtune_cpu_update(cpu, now);
-		schedtune_interactive(update_timeout);
+		sched_interactive(update_timeout);
 	}
 
 	return bg->boost_max;
@@ -752,70 +745,6 @@ static struct cftype files[] = {
 		.write_u64 = prefer_idle_write_wrapper,
 	},
 	{ }	/* terminate */
-};
-
-static void schedtune_interactive_event(struct input_handle *handle,
-		unsigned int type, unsigned int code, int value)
-{
-	schedtune_interactive(update_ts);
-}
-
-static int schedtune_interactive_connect(struct input_handler *handler,
-		struct input_dev *dev, const struct input_device_id *id)
-{
-	struct input_handle *handle;
-	int error;
-
-	handle = kzalloc(sizeof(struct input_handle), GFP_KERNEL);
-	if (!handle)
-		return -ENOMEM;
-
-	handle->dev = dev;
-	handle->handler = handler;
-	handle->name = "schedtune";
-
-	error = input_register_handle(handle);
-	if (error)
-		goto err2;
-
-	error = input_open_device(handle);
-	if (error)
-		goto err1;
-
-	return 0;
-err1:
-	input_unregister_handle(handle);
-err2:
-	kfree(handle);
-	return error;
-}
-
-static void schedtune_interactive_disconnect(struct input_handle *handle)
-{
-	input_close_device(handle);
-	input_unregister_handle(handle);
-	kfree(handle);
-}
-
-static const struct input_device_id schedtune_ids[] = {
-	/* Multi-touch touchscreen */
-	{
-		.flags = INPUT_DEVICE_ID_MATCH_EVBIT |
-			INPUT_DEVICE_ID_MATCH_ABSBIT,
-		.evbit = { BIT_MASK(EV_ABS) },
-		.absbit = { [BIT_WORD(ABS_MT_POSITION_X)] =
-			BIT_MASK(ABS_MT_POSITION_X) |
-			BIT_MASK(ABS_MT_POSITION_Y) }
-	},
-	{ }
-};
-
-static struct input_handler schedtune_interactive_handler = {
-	.event		   = schedtune_interactive_event,
-	.connect	   = schedtune_interactive_connect,
-	.disconnect	   = schedtune_interactive_disconnect,
-	.name		   = "schedtune_h",
-	.id_table	   = schedtune_ids,
 };
 
 static int
@@ -1157,8 +1086,6 @@ schedtune_init(void)
 
 #ifdef CONFIG_CGROUP_SCHEDTUNE
 	schedtune_init_cgroups();
-	if (input_register_handler(&schedtune_interactive_handler))
-		pr_err("Failed to register schedtune interactive handler\n");
 #else
 	pr_info("schedtune: configured to support global boosting only\n");
 #endif

@@ -159,7 +159,7 @@ void compute_work_load(struct devfreq_dev_status *stats,
 	spin_unlock(&sample_lock);
 
 	if (((busy * 100) / stats->total_time) >= 10)
-		schedtune_interactive(update_ts);
+		sched_interactive(update_ts);
 }
 
 /* Trap into the TrustZone, and call funcs there. */

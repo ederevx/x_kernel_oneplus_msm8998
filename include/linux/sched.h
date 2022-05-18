@@ -2687,12 +2687,14 @@ static inline void sched_autogroup_exit(struct signal_struct *sig) { }
 static inline void sched_autogroup_exit_task(struct task_struct *p) { }
 #endif
 
-#ifdef CONFIG_SCHED_TUNE
-extern struct lwtimeout schedtune_interactive_lwt;
-#define schedtune_interactive(cmd) lwtimeout_##cmd(&schedtune_interactive_lwt)
-#else
-#define schedtune_interactive(cmd) ({ int ret = 0; ret; })
-#endif
+extern struct lwtimeout sched_interactive_lwt;
+#define sched_interactive(cmd) lwtimeout_##cmd(&sched_interactive_lwt)
+
+/* Only halve or double parameters when sched is interactive or not */
+#define sched_interactive_downscale(is_interactive, param)	\
+	(param >> (sched_interactive(check_timeout) != is_interactive))
+#define sched_interactive_upscale(is_interactive, param)	\
+	(param << (sched_interactive(check_timeout) != is_interactive))
 
 extern int yield_to(struct task_struct *p, bool preempt);
 extern void set_user_nice(struct task_struct *p, long nice);
