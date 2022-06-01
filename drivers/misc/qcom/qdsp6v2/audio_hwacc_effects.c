@@ -128,7 +128,7 @@ static int audio_effects_shared_ioctl(struct file *file, unsigned cmd,
 					effects->config.meta_mode_enabled,
 					effects->config.output.bits_per_sample,
 					true /*overwrite topology*/,
-					ASM_STREAM_POSTPROC_TOPO_ID_HPX_MASTER);
+					ASM_STREAM_POSTPROC_TOPO_ID_SA_PLUS);
 		if (rc < 0) {
 			pr_err("%s: Open failed for hw accelerated effects:rc=%d\n",
 				__func__, rc);
