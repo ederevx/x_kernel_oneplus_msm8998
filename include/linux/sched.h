@@ -2690,11 +2690,16 @@ static inline void sched_autogroup_exit_task(struct task_struct *p) { }
 extern struct lwtimeout sched_interactive_lwt;
 #define sched_interactive(cmd) lwtimeout_##cmd(&sched_interactive_lwt)
 
-/* Only halve or double parameters when sched is interactive or not */
+#define sched_interactive_rshift(is_interactive, n_bits, param)	\
+	(param >> (n_bits * (sched_interactive(check_timeout) != is_interactive)))
+#define sched_interactive_lshift(is_interactive, n_bits, param)	\
+	(param << (n_bits * (sched_interactive(check_timeout) != is_interactive)))
+
+/* Only halve or double parameters by default */
 #define sched_interactive_downscale(is_interactive, param)	\
-	(param >> (sched_interactive(check_timeout) != is_interactive))
+	sched_interactive_rshift(is_interactive, 1, param)
 #define sched_interactive_upscale(is_interactive, param)	\
-	(param << (sched_interactive(check_timeout) != is_interactive))
+	sched_interactive_lshift(is_interactive, 1, param)
 
 extern int yield_to(struct task_struct *p, bool preempt);
 extern void set_user_nice(struct task_struct *p, long nice);

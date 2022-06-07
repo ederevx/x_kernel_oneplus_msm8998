@@ -120,8 +120,7 @@ static bool sugov_up_down_rate_limit(struct sugov_policy *sg_policy, u64 time,
 			return true;
 
 	/* Make it more probable to drop freq when load is uninteractive */
-	if (sched_interactive(check_timeout))
-		delta_ns *= 5;
+	delta_ns = sched_interactive_lshift(false, 3, delta_ns);
 
 	if (next_freq < sg_policy->next_freq &&
 	    delta_ns < DOWN_RATE_DELAY_NS)
