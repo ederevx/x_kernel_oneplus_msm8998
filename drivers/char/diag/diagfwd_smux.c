@@ -277,7 +277,7 @@ static struct diag_remote_dev_ops diag_smux_fwd_ops = {
 	.fwd_complete = smux_fwd_complete,
 };
 
-int diag_smux_init()
+int diag_smux_init(void)
 {
 	int i;
 	int err = 0;
@@ -314,7 +314,7 @@ fail:
 	return err;
 }
 
-void diag_smux_exit()
+void diag_smux_exit(void)
 {
 	int i;
 	struct diag_smux_info *ch = NULL;

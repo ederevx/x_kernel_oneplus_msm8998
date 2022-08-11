@@ -479,7 +479,7 @@ static struct diag_remote_dev_ops diag_hsic_fwd_ops = {
 	.fwd_complete = hsic_fwd_complete,
 };
 
-int diag_hsic_init()
+int diag_hsic_init(void)
 {
 	int i;
 	int err = 0;
@@ -520,7 +520,7 @@ fail:
 	return -ENOMEM;
 }
 
-void diag_hsic_exit()
+void diag_hsic_exit(void)
 {
 	int i;
 	struct diag_hsic_info *ch = NULL;
