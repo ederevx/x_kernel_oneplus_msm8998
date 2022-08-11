@@ -64,7 +64,7 @@ static inline bool lwtimeout_check_timeout(struct lwtimeout *lwt)
  */
 static inline void lwtimeout_update_timeout(struct lwtimeout *lwt)
 {
-	u64 curr;
+	u64 ts_curr;
 
 	if (test_bit(TIMEOUT_EXPIRED, &lwt->state))
 		return;
@@ -72,10 +72,10 @@ static inline void lwtimeout_update_timeout(struct lwtimeout *lwt)
 	if (test_bit(TIMEOUT_LOCKED, &lwt->state))
 		return;
 
-	curr = ktime_get_ns();
+	ts_curr = ktime_get_ns();
 
 	if (raw_spin_trylock(&lwt->ts_lock)) {
-		if ((curr - lwt->ts) > lwt->duration)
+		if (ts_curr > lwt->ts + lwt->duration)
 			set_bit(TIMEOUT_EXPIRED, &lwt->state);
 		raw_spin_unlock(&lwt->ts_lock);
 	}
@@ -87,14 +87,18 @@ static inline void lwtimeout_update_timeout(struct lwtimeout *lwt)
  */
 static inline void lwtimeout_update_ts(struct lwtimeout *lwt)
 {
-	u64 curr = ktime_get_ns();
+	u64 ts_new = ktime_get_ns();
 
 	raw_spin_lock(&lwt->ts_lock);
-	if (curr > lwt->ts)
-		lwt->ts = curr;
-	raw_spin_unlock(&lwt->ts_lock);
+	if (ts_new > lwt->ts) {
 
-	clear_bit(TIMEOUT_EXPIRED, &lwt->state);
+		/* Only access state variable when it is likely to have expired */
+		if (ts_new > lwt->ts + lwt->duration)
+			clear_bit(TIMEOUT_EXPIRED, &lwt->state);
+
+		lwt->ts = ts_new;
+	}
+	raw_spin_unlock(&lwt->ts_lock);
 }
 
 /**
