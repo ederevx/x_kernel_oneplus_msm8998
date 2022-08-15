@@ -173,23 +173,36 @@ struct test_header {
 #define GESTURE_S               14 // S
 
 // Gesture key codes
-#define KEY_GESTURE_W               246 // W
-#define KEY_GESTURE_M               247 // M
-#define KEY_GESTURE_S               248 // S
-#define KEY_DOUBLE_TAP              KEY_WAKEUP // double tap to wake
-#define KEY_GESTURE_CIRCLE          250 // draw circle to lunch camera
-#define KEY_GESTURE_TWO_SWIPE       251 // swipe two finger vertically to play/pause
-#define KEY_GESTURE_UP_ARROW        252 // draw up arrow to toggle flashlight
-#define KEY_GESTURE_LEFT_ARROW      253 // draw left arrow for previous track
-#define KEY_GESTURE_RIGHT_ARROW     254 // draw right arrow for next track
-#define KEY_GESTURE_DOWN_ARROW      255 // draw down arrow to toggle flashlight
-#define KEY_GESTURE_SWIPE_RIGHT     KEY_F5
-#define KEY_GESTURE_SWIPE_LEFT      KEY_F6
-#define KEY_GESTURE_SWIPE_DOWN      KEY_F7
-#define KEY_GESTURE_SWIPE_UP        KEY_F8
+
+// Set mode based on whether enable and/or switch write functions were used
+#define ENABLE_IN_USE BIT0
+#define SWITCH_IN_USE BIT1
+
+static uint32_t key_code_mode __read_mostly = 0;
+
+struct gesture_key_codes {
+	int oos_key_code, alt_key_code;
+};
+
+static struct gesture_key_codes key_codes_table[] = {
+	{ 0 }, // GESTURE_NONE
+	{ KEY_WAKEUP, KEY_F1 }, // GESTURE_DOUBLE_TAP
+	{ 255, KEY_F4 }, // GESTURE_DOWN_ARROW
+	{ 252, KEY_F7 }, // GESTURE_UP_ARROW
+	{ 254, KEY_F6 }, // GESTURE_RIGHT_ARROW
+	{ 253, KEY_F5 }, // GESTURE_LEFT_ARROW
+	{ 250, KEY_F2 }, // GESTURE_CIRCLE
+	{ 251, KEY_F3 }, // GESTURE_DOUBLE_SWIPE
+	{ KEY_F5, KEY_F9 }, // GESTURE_RIGHT_SWIPE
+	{ KEY_F6, KEY_F8 }, // GESTURE_LEFT_SWIPE
+	{ KEY_F7, KEY_F14 }, // GESTURE_DOWN_SWIPE
+	{ KEY_F8, KEY_F13 }, // GESTURE_UP_SWIPE
+	{ 247, KEY_F10 }, // GESTURE_M
+	{ 246, KEY_F11 }, // GESTURE_W
+	{ 248, KEY_F12 }, // GESTURE_S
+};
 
 /* For OOS */
-static bool oos_init __read_mostly = false;
 static int gesture_switch;
 #endif
 
@@ -1264,75 +1277,17 @@ static void gesture_judge(struct synaptics_ts_data *ts)
 		break;
 	}
 
-	if (oos_init)
-		goto set_gesture;
-
-	// Get key code based on registered gesture.
-	switch (gesture) {
-	case GESTURE_DOUBLE_TAP:
-		keyCode = KEY_DOUBLE_TAP;
-		break;
-
-	case GESTURE_UP_ARROW:
-		keyCode = KEY_GESTURE_UP_ARROW;
-		break;
-
-	case GESTURE_DOWN_ARROW:
-		keyCode = KEY_GESTURE_DOWN_ARROW;
-		break;
-
-	case GESTURE_LEFT_ARROW:
-		keyCode = KEY_GESTURE_LEFT_ARROW;
-		break;
-
-	case GESTURE_RIGHT_ARROW:
-		keyCode = KEY_GESTURE_RIGHT_ARROW;
-		break;
-
-	case GESTURE_CIRCLE:
-		keyCode = KEY_GESTURE_CIRCLE;
-		break;
-
-	case GESTURE_DOUBLE_SWIPE:
-		keyCode = KEY_GESTURE_TWO_SWIPE;
-		break;
-
-	case GESTURE_LEFT_SWIPE:
-		keyCode = KEY_GESTURE_SWIPE_LEFT;
-		break;
-
-	case GESTURE_RIGHT_SWIPE:
-		keyCode = KEY_GESTURE_SWIPE_RIGHT;
-		break;
-
-	case GESTURE_UP_SWIPE:
-		keyCode = KEY_GESTURE_SWIPE_UP;
-		break;
-
-	case GESTURE_DOWN_SWIPE:
-		keyCode = KEY_GESTURE_SWIPE_DOWN;
-		break;
-
-	case GESTURE_W:
-		keyCode = KEY_GESTURE_W;
-		break;
-
-	case GESTURE_M:
-		keyCode = KEY_GESTURE_M;
-		break;
-
-	case GESTURE_S:
-		keyCode = KEY_GESTURE_S;
-		break;
-
-	default:
-		break;
+	if (!(key_code_mode & SWITCH_IN_USE)) {
+		// Get key code based on registered gesture.
+		keyCode = (key_code_mode & ENABLE_IN_USE) ? 
+				key_codes_table[gesture].alt_key_code : 
+				key_codes_table[gesture].oos_key_code;
 	}
 
-set_gesture:
 	synaptics_get_coordinate_point(ts);
 
 	if (ts->gestures_enable & (0x1 << gesture) ||
+		(!!ts->gestures_enable && (key_code_mode & ENABLE_IN_USE)) ||
 		gesture == GESTURE_S || gesture == GESTURE_W ||
 		gesture == GESTURE_M) {
 		gesture_upload = gesture;
@@ -1768,9 +1723,6 @@ char __user *user_buf, size_t count, loff_t *ppos)
 	char page[PAGESIZE];
 	struct synaptics_ts_data *ts = ts_g;
 
-	if (unlikely(!oos_init))
-		oos_init = true;
-
 	if (!ts)
 		return ret;
 	TPD_DEBUG("gesture enable is: %d\n", ts->gestures_enable);
@@ -1795,8 +1747,8 @@ const char __user *buffer, size_t count, loff_t *ppos)
 	char buf[10];
 	struct synaptics_ts_data *ts = ts_g;
 
-	if (unlikely(!oos_init))
-		oos_init = true;
+	if (unlikely(!(key_code_mode & ENABLE_IN_USE)))
+		key_code_mode |= ENABLE_IN_USE;
 
 	if (!ts)
 		return count;
@@ -1849,9 +1801,6 @@ char __user *user_buf, size_t count, loff_t *ppos)
 	char page[PAGESIZE];
 	struct synaptics_ts_data *ts = ts_g;
 
-	if (unlikely(!oos_init))
-		oos_init = true;
-
 	if (!ts)
 		return ret;
 
@@ -1868,8 +1817,8 @@ const char __user *page, size_t count, loff_t *ppos)
 	char buf[10] = {0};
 	struct synaptics_ts_data *ts = ts_g;
 
-	if (unlikely(!oos_init))
-		oos_init = true;
+	if (unlikely(!(key_code_mode & SWITCH_IN_USE)))
+		key_code_mode |= SWITCH_IN_USE;
 
 	if (ts->loading_fw) {
 		TPD_ERR("%s FW is updating break!!\n", __func__);
@@ -2956,6 +2905,7 @@ static int	synaptics_input_init(struct synaptics_ts_data *ts)
 {
 	int attr_count = 0;
 	int ret = 0;
+	int i;
 
 	TPD_DEBUG("%s is called\n", __func__);
 	ts->input_dev = input_allocate_device();
@@ -2976,21 +2926,11 @@ static int	synaptics_input_init(struct synaptics_ts_data *ts)
 	set_bit(INPUT_PROP_DIRECT, ts->input_dev->propbit);
 	set_bit(BTN_TOOL_FINGER, ts->input_dev->keybit);
 #ifdef SUPPORT_GESTURE
-	set_bit(KEY_F4, ts->input_dev->keybit); //doulbe-tap resume
-	set_bit(KEY_DOUBLE_TAP, ts->input_dev->keybit);
-	set_bit(KEY_GESTURE_W, ts->input_dev->keybit);
-	set_bit(KEY_GESTURE_M, ts->input_dev->keybit);
-	set_bit(KEY_GESTURE_S, ts->input_dev->keybit);
-	set_bit(KEY_GESTURE_CIRCLE, ts->input_dev->keybit);
-	set_bit(KEY_GESTURE_TWO_SWIPE, ts->input_dev->keybit);
-	set_bit(KEY_GESTURE_UP_ARROW, ts->input_dev->keybit);
-	set_bit(KEY_GESTURE_LEFT_ARROW, ts->input_dev->keybit);
-	set_bit(KEY_GESTURE_RIGHT_ARROW, ts->input_dev->keybit);
-	set_bit(KEY_GESTURE_DOWN_ARROW, ts->input_dev->keybit);
-	set_bit(KEY_GESTURE_SWIPE_UP, ts->input_dev->keybit);
-	set_bit(KEY_GESTURE_SWIPE_LEFT, ts->input_dev->keybit);
-	set_bit(KEY_GESTURE_SWIPE_RIGHT, ts->input_dev->keybit);
-	set_bit(KEY_GESTURE_SWIPE_DOWN, ts->input_dev->keybit);
+	// Register all known key codes
+	for (i = 0; i < ARRAY_SIZE(key_codes_table); i++) {
+		set_bit(key_codes_table[i].alt_key_code, ts->input_dev->keybit);
+		set_bit(key_codes_table[i].oos_key_code, ts->input_dev->keybit);
+	}
 #endif
 	set_bit(KEY_BUTTON_LEFT, ts->input_dev->keybit);
 	set_bit(KEY_BUTTON_RIGHT, ts->input_dev->keybit);
