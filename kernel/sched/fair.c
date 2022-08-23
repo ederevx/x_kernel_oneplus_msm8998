@@ -3813,7 +3813,7 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int initial)
 		 * Halve their sleep time's effect, to allow
 		 * for a gentler effect of sleepers:
 		 */
-		if (sched_feat(GENTLE_FAIR_SLEEPERS))
+		if (sched_feat(GENTLE_FAIR_SLEEPERS) && sched_interactive(check_timeout))
 			thresh >>= 1;
 
 		vruntime -= thresh;
@@ -4130,7 +4130,7 @@ pick_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 				second = curr;
 		}
 
-		if (second && (sched_feat(STRICT_SKIP_BUDDY) ||
+		if (second && ((sched_feat(STRICT_SKIP_BUDDY) && sched_interactive(check_timeout)) ||
 		    wakeup_preempt_entity(second, left) < 1))
 			se = second;
 	}
@@ -5918,7 +5918,7 @@ static inline int select_energy_cpu_idx(struct energy_env *eenv)
 		if (eenv->cpu[cpu_idx].nrg_delta <
 		    eenv->cpu[eenv->next_idx].nrg_delta) {
 			eenv->next_idx = cpu_idx;
-			if (sched_feat(FBT_STRICT_ORDER))
+			if (sched_feat(FBT_STRICT_ORDER) && !sched_interactive(check_timeout))
 				break;
 		}
 	}
@@ -6776,7 +6776,7 @@ int cpu_util_without(int cpu, struct task_struct *p)
 	 * covered by the following code when estimated utilization is
 	 * enabled.
 	 */
-	if (sched_feat(UTIL_EST)) {
+	if (sched_feat(UTIL_EST) && !sched_interactive(check_timeout)) {
 		unsigned int estimated =
 			READ_ONCE(cfs_rq->avg.util_est.enqueued);
 

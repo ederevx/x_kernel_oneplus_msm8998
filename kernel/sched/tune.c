@@ -353,7 +353,7 @@ schedtune_boostgroup_update(int idx, int boost)
 static inline bool
 schedtune_update_timestamp(struct task_struct *p)
 {
-	if (sched_feat(SCHEDTUNE_BOOST_HOLD_ALL))
+	if (sched_feat(SCHEDTUNE_BOOST_HOLD_ALL) && !sched_interactive(check_timeout))
 		return true;
 
 	return task_has_rt_policy(p);
@@ -777,7 +777,7 @@ static void write_default_values(struct cgroup_subsys_state *css)
 {
 	static struct st_data st_targets[] = {
 		{ "foreground",	5, 0 },
-		{ "top-app",	25, 1 },
+		{ "top-app",	25, 0 },
 	};
 	int i;
 

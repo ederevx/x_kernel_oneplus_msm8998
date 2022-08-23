@@ -112,7 +112,7 @@
  * ON: If the target CPU saves any energy, use that.
  * OFF: Use whichever of target or backup saves most.
  */
-#define SCHED_FEAT_FBT_STRICT_ORDER 0
+#define SCHED_FEAT_FBT_STRICT_ORDER 1
 
 /*
  * Apply schedtune boost hold to tasks of all sched classes.
@@ -123,7 +123,7 @@
  * If disabled, this behaviour will only apply to tasks of the
  * RT class.
  */
-#define SCHED_FEAT_SCHEDTUNE_BOOST_HOLD_ALL 0
+#define SCHED_FEAT_SCHEDTUNE_BOOST_HOLD_ALL 1
 
 /*
  * UtilEstimation. Use estimated CPU utilization.

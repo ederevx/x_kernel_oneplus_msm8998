@@ -102,6 +102,9 @@ static bool sugov_should_update_freq(struct sugov_policy *sg_policy, u64 time)
 	if (unlikely(sg_policy->need_freq_update))
 		return true;
 
+	if (sched_interactive(check_timeout))
+		return true;
+
 	delta_ns = time - sg_policy->last_freq_update_time;
 
 	/* No need to recalculate next freq for min_rate_limit_us at least */
@@ -113,14 +116,14 @@ static bool sugov_up_down_rate_limit(struct sugov_policy *sg_policy, u64 time,
 {
 	s64 delta_ns;
 
+	if (sched_interactive(check_timeout))
+		return false;
+
 	delta_ns = time - sg_policy->last_freq_update_time;
 
 	if (next_freq > sg_policy->next_freq &&
 	    delta_ns < UP_RATE_DELAY_NS)
 			return true;
-
-	/* Make it more probable to drop freq when load is uninteractive */
-	delta_ns = sched_interactive_lshift(false, 3, delta_ns);
 
 	if (next_freq < sg_policy->next_freq &&
 	    delta_ns < DOWN_RATE_DELAY_NS)

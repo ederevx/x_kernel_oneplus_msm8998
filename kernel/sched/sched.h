@@ -1775,7 +1775,7 @@ static inline unsigned long __cpu_util(int cpu, int delta)
 	cfs_rq = &cpu_rq(cpu)->cfs;
 	util = READ_ONCE(cfs_rq->avg.util_avg);
 
-	if (sched_feat(UTIL_EST))
+	if (sched_feat(UTIL_EST) && !sched_interactive(check_timeout))
 		util = max(util, READ_ONCE(cfs_rq->avg.util_est.enqueued));
 
 #ifdef CONFIG_SCHED_WALT
@@ -1802,7 +1802,7 @@ static inline unsigned long cpu_util_freq(int cpu)
 	unsigned long capacity = capacity_orig_of(cpu);
 
 	/* UTIL_EST */
-	if (sched_feat(UTIL_EST)) {
+	if (sched_feat(UTIL_EST) && !sched_interactive(check_timeout)) {
 		util = max_t(unsigned long, util,
 			     READ_ONCE(cpu_rq(cpu)->cfs.avg.util_est.enqueued));
 	}
