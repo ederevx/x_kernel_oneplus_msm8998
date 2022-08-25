@@ -1629,7 +1629,7 @@ extern unsigned int __read_mostly sysctl_sched_migration_cost;
 
 static inline u64 sched_avg_period(void)
 {
-	return (u64)sched_interactive_lshift(false, 2, sysctl_sched_time_avg) * NSEC_PER_MSEC / 2;
+	return (u64)sysctl_sched_time_avg * NSEC_PER_MSEC / 2;
 }
 
 #ifdef CONFIG_SCHED_HRTICK
