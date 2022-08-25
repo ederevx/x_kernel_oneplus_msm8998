@@ -83,7 +83,7 @@ static int msm_route_ext_ec_ref;
 static bool is_custom_stereo_on;
 static bool is_ds2_on;
 static bool swap_ch;
-static int msm_native_mode;
+static int msm_native_mode = 3;
 
 #define WEIGHT_0_DB 0x4000
 /* all the FEs which can support channel mixer */
@@ -3601,21 +3601,6 @@ static int msm_native_mode_put(struct snd_kcontrol *kcontrol,
 	 * 2 << 11: use channel native mode
 	 * 3 << 11: use bit width and channel native mode
 	*/
-	switch (ucontrol->value.integer.value[0]) {
-	case 3:
-	case 2:
-	case 1:
-		msm_native_mode = ucontrol->value.integer.value[0];
-		break;
-	default:
-		msm_native_mode = 0;
-		break;
-	}
-
-	pr_debug("%s: msm_native_mode = %d ucontrol value %ld\n",
-		__func__, msm_native_mode,
-		ucontrol->value.integer.value[0]);
-	adm_set_native_mode(msm_native_mode);
 	return 0;
 }
 

@@ -2671,13 +2671,8 @@ static int adm_open_v8(int tmp_port, int port_idx, int copp_idx,
 	open_v8.hdr.token = port_idx << 16 | copp_idx;
 	open_v8.hdr.opcode = ADM_CMD_DEVICE_OPEN_V8;
 
-	if (this_adm.native_mode != 0) {
-		open_v8.flags = flags |
-			(this_adm.native_mode << 11);
-		this_adm.native_mode = 0;
-	} else {
-		open_v8.flags = flags;
-	}
+	/* Force bit width and channel native mode */
+	open_v8.flags = flags | (3 << 11);
 
 	open_v8.mode_of_operation = path;
 	open_v8.endpoint_id_1 = tmp_port;
