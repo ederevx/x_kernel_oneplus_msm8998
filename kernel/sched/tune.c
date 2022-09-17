@@ -596,10 +596,54 @@ int schedtune_cpu_boost(int cpu)
 	return bg->boost_max;
 }
 
+struct adj_filter_data {
+	int st_idx;
+	const char *name;
+	const short max_adj;
+};
+
+static struct adj_filter_data adj_filter_targets[] __read_mostly = {
+	{ -1, "foreground",	100 /* VISIBLE_APP_ADJ */ }, 
+	{ -1, "top-app",	100 /* VISIBLE_APP_ADJ */ },
+};
+
+static void adj_filter_st_idx_write(struct cgroup_subsys_state *css)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(adj_filter_targets); i++) {
+		struct adj_filter_data *f_tgt = &adj_filter_targets[i];
+
+		if (f_tgt->st_idx != -1)
+			continue;
+
+		if (!strcmp(css->cgroup->kn->name, f_tgt->name)) {
+			f_tgt->st_idx = css_st(css)->idx;
+			break;
+		}
+	}
+}
+
+static inline bool schedtune_task_boost_adj_filter(int st_idx, 
+			       struct task_struct *p)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(adj_filter_targets); i++) {
+		struct adj_filter_data f_tgt = adj_filter_targets[i];
+
+		/* Filter out tasks beyond defined adj limit */
+		if (st_idx == f_tgt.st_idx)
+			return READ_ONCE(p->signal->oom_score_adj) > f_tgt.max_adj;
+	}
+
+	return false;
+}
+
 int schedtune_task_boost(struct task_struct *p)
 {
 	struct schedtune *st;
-	int task_boost;
+	int task_boost = 0;
 
 	if (unlikely(!schedtune_initialized))
 		return 0;
@@ -607,7 +651,8 @@ int schedtune_task_boost(struct task_struct *p)
 	/* Get task boost value */
 	rcu_read_lock();
 	st = task_schedtune(p);
-	task_boost = st->boost;
+	if (!schedtune_task_boost_adj_filter(st->idx, p))
+		task_boost = st->boost;
 	rcu_read_unlock();
 
 	return task_boost;
@@ -619,14 +664,15 @@ int schedtune_task_boost(struct task_struct *p)
 int schedtune_task_boost_rcu_locked(struct task_struct *p)
 {
 	struct schedtune *st;
-	int task_boost;
+	int task_boost = 0;
 
 	if (unlikely(!schedtune_initialized))
 		return 0;
 
 	/* Get task boost value */
 	st = task_schedtune(p);
-	task_boost = st->boost;
+	if (!schedtune_task_boost_adj_filter(st->idx, p))
+		task_boost = st->boost;
 
 	return task_boost;
 }
@@ -814,6 +860,7 @@ schedtune_css_alloc(struct cgroup_subsys_state *parent_css)
 #ifdef CONFIG_STUNE_ASSIST
 		write_default_values(&allocated_group[idx]->css);
 #endif
+		adj_filter_st_idx_write(&allocated_group[idx]->css);
 	}
 	if (idx == BOOSTGROUPS_COUNT) {
 		pr_err("Trying to create more than %d SchedTune boosting groups\n",
