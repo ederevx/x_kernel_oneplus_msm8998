@@ -102,9 +102,6 @@ static bool sugov_should_update_freq(struct sugov_policy *sg_policy, u64 time)
 	if (unlikely(sg_policy->need_freq_update))
 		return true;
 
-	if (sched_interactive(check_timeout))
-		return true;
-
 	delta_ns = time - sg_policy->last_freq_update_time;
 
 	/* No need to recalculate next freq for min_rate_limit_us at least */
@@ -115,9 +112,6 @@ static bool sugov_up_down_rate_limit(struct sugov_policy *sg_policy, u64 time,
 				     unsigned int next_freq)
 {
 	s64 delta_ns;
-
-	if (sched_interactive(check_timeout))
-		return false;
 
 	delta_ns = time - sg_policy->last_freq_update_time;
 
