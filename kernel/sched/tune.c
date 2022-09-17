@@ -590,10 +590,8 @@ int schedtune_cpu_boost(int cpu)
 	now = sched_clock_cpu(cpu);
 
 	/* Check to see if we have a hold in effect */
-	if (schedtune_boost_timeout(now, bg->boost_ts)) {
+	if (schedtune_boost_timeout(now, bg->boost_ts))
 		schedtune_cpu_update(cpu, now);
-		sched_interactive(update_timeout);
-	}
 
 	return bg->boost_max;
 }

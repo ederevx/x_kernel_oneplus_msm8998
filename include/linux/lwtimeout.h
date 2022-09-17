@@ -8,16 +8,10 @@
 #define _LINUX_LWTIMEOUT_H
 
 struct lwtimeout {
-	unsigned long state;
 	atomic_t soft_lock;
-	raw_spinlock_t ts_lock;
 	u64 ts;
-	u64 duration;
-};
-
-enum lwt_flags {
-	TIMEOUT_EXPIRED = 0,
-	TIMEOUT_LOCKED
+	bool expired;
+	const u64 duration;
 };
 
 /**
@@ -26,8 +20,7 @@ enum lwt_flags {
  */
 static inline void lwtimeout_lock(struct lwtimeout *lwt)
 {
-	if (atomic_inc_return(&lwt->soft_lock) == 1)
-		set_bit(TIMEOUT_LOCKED, &lwt->state);
+	atomic_inc(&lwt->soft_lock);
 }
 
 /**
@@ -36,10 +29,8 @@ static inline void lwtimeout_lock(struct lwtimeout *lwt)
  */
 static inline void lwtimeout_unlock(struct lwtimeout *lwt)
 {
-	if (atomic_read(&lwt->soft_lock) > 0) {
-		if (atomic_dec_return(&lwt->soft_lock) == 0)
-			clear_bit(TIMEOUT_LOCKED, &lwt->state);
-	}
+	if (likely(atomic_read(&lwt->soft_lock) > 0))
+		atomic_dec(&lwt->soft_lock);
 }
 
 /**
@@ -48,37 +39,20 @@ static inline void lwtimeout_unlock(struct lwtimeout *lwt)
  */
 static inline bool lwtimeout_check_timeout(struct lwtimeout *lwt) 
 {
-	if (!test_bit(TIMEOUT_EXPIRED, &lwt->state))
-		return false;
+	bool expired = READ_ONCE(lwt->expired);
 
-	/* Do not timeout yet when timestamp is being accessed */
-	if (raw_spin_is_locked(&lwt->ts_lock))
-		return false;
-
-	return true;
-}
-
-/**
- * lwtimeout_update - evaluate the timeout state value
- * @lwt: timeout to be modified
- */
-static inline void lwtimeout_update_timeout(struct lwtimeout *lwt)
-{
-	u64 ts_curr;
-
-	if (test_bit(TIMEOUT_EXPIRED, &lwt->state))
-		return;
-
-	if (test_bit(TIMEOUT_LOCKED, &lwt->state))
-		return;
-
-	ts_curr = ktime_get_ns();
-
-	if (raw_spin_trylock(&lwt->ts_lock)) {
-		if (ts_curr > lwt->ts + lwt->duration)
-			set_bit(TIMEOUT_EXPIRED, &lwt->state);
-		raw_spin_unlock(&lwt->ts_lock);
+	if (!expired) {
+		/* Enforce soft lock while also making the update single-threaded */
+		if (atomic_inc_return(&lwt->soft_lock) == 1) {
+			if (ktime_get_ns() > READ_ONCE(lwt->ts) + lwt->duration) {
+				WRITE_ONCE(lwt->expired, true);
+				expired = true;
+			}
+		}
+		atomic_dec(&lwt->soft_lock);
 	}
+
+	return expired;
 }
 
 /**
@@ -87,18 +61,15 @@ static inline void lwtimeout_update_timeout(struct lwtimeout *lwt)
  */
 static inline void lwtimeout_update_ts(struct lwtimeout *lwt)
 {
+	bool expired = READ_ONCE(lwt->expired);
 	u64 ts_new = ktime_get_ns();
 
-	raw_spin_lock(&lwt->ts_lock);
-	if (ts_new > lwt->ts) {
-
-		/* Only access state variable when it is likely to have expired */
-		if (ts_new > lwt->ts + lwt->duration)
-			clear_bit(TIMEOUT_EXPIRED, &lwt->state);
-
-		lwt->ts = ts_new;
-	}
-	raw_spin_unlock(&lwt->ts_lock);
+	atomic_inc(&lwt->soft_lock);
+	if (expired || ts_new > READ_ONCE(lwt->ts))
+		WRITE_ONCE(lwt->ts, ts_new);
+	if (expired)
+		WRITE_ONCE(lwt->expired, false);
+	atomic_dec(&lwt->soft_lock);
 }
 
 /**
@@ -108,10 +79,9 @@ static inline void lwtimeout_update_ts(struct lwtimeout *lwt)
  */
 #define DEFINE_LW_TIMEOUT(_name, _expires)		\
 	struct lwtimeout _name = {							\
-		.state = 0,									\
 		.soft_lock = ATOMIC_INIT(0),			\
-		.ts_lock = __RAW_SPIN_LOCK_UNLOCKED(_name.ts_lock),	\
 		.ts = _expires,						\
+		.expired = false,									\
 		.duration = _expires							\
 	}
 
