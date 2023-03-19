@@ -2690,9 +2690,6 @@ static inline void sched_autogroup_exit(struct signal_struct *sig) { }
 static inline void sched_autogroup_exit_task(struct task_struct *p) { }
 #endif
 
-extern struct lwtimeout sched_interactive_lwt;
-#define sched_interactive(cmd) lwtimeout_##cmd(&sched_interactive_lwt)
-
 extern int yield_to(struct task_struct *p, bool preempt);
 extern void set_user_nice(struct task_struct *p, long nice);
 extern int task_prio(const struct task_struct *p);
@@ -3617,6 +3614,17 @@ void cpufreq_add_update_util_hook(int cpu, struct update_util_data *data,
                        void (*func)(struct update_util_data *data, u64 time,
                                     unsigned int flags));
 void cpufreq_remove_update_util_hook(int cpu);
+
+extern struct lwtimeout sched_interactive_lwt;
+extern atomic_t sched_interactive_hold_cnt;
+
+#define sched_interactive(cmd) lwtimeout_##cmd(&sched_interactive_lwt)
+#define sched_interactive_hold(cmd) atomic_##cmd(&sched_interactive_hold_cnt)
+#define sched_interactive_check() (sched_interactive_hold(read) > 0 || !sched_interactive(check_timeout))
+#else
+#define sched_interactive(cmd) ({ int ret = 0; ret; })
+#define sched_interactive_hold(cmd) ({ int ret = 0; ret; })
+#define sched_interactive_check() ({ int ret = 0; ret; })
 #endif /* CONFIG_CPU_FREQ */
 
 #endif

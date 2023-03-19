@@ -6776,7 +6776,7 @@ int cpu_util_without(int cpu, struct task_struct *p)
 	 * covered by the following code when estimated utilization is
 	 * enabled.
 	 */
-	if (sched_feat(UTIL_EST) && !sched_interactive(check_timeout)) {
+	if (sched_feat(UTIL_EST) && sched_interactive_check()) {
 		unsigned int estimated =
 			READ_ONCE(cfs_rq->avg.util_est.enqueued);
 

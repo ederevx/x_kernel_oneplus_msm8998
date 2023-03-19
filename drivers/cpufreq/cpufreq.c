@@ -2029,6 +2029,8 @@ int __cpufreq_driver_target(struct cpufreq_policy *policy,
 	}
 
 out:
+	/* Update sched_interactive after CPU freq updates */
+	sched_interactive(update_timeout);
 	return retval;
 }
 EXPORT_SYMBOL_GPL(__cpufreq_driver_target);

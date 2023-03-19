@@ -3771,6 +3771,7 @@ int mdss_fb_atomic_commit(struct fb_info *info,
 		goto end;
 	}
 
+	sched_interactive_hold(inc);
 	commit_v1 = &commit->commit_v1;
 	if (commit_v1->flags & MDP_VALIDATE_LAYER) {
 		ret = mdss_fb_wait_for_kickoff(mfd);
@@ -3846,6 +3847,7 @@ int mdss_fb_atomic_commit(struct fb_info *info,
 end:
 	if (ret && (mfd->panel.type == WRITEBACK_PANEL) && wb_change)
 		mdss_fb_update_resolution(mfd, old_xres, old_yres, old_format);
+	sched_interactive_hold(dec);
 	return ret;
 }
 

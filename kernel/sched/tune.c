@@ -269,8 +269,6 @@ schedtune_cpu_update(int cpu, u64 now)
 	if (sched_interactive(check_timeout))
 		return;
 
-	sched_interactive(lock);
-
 	bg = &per_cpu(cpu_boost_groups, cpu);
 
 	for (idx = 0; idx < BOOSTGROUPS_COUNT; ++idx) {
@@ -295,8 +293,6 @@ schedtune_cpu_update(int cpu, u64 now)
 		boost_max = 0;
 	bg->boost_max = boost_max;
 	bg->boost_ts = boost_ts;
-
-	sched_interactive(unlock);
 }
 
 static int

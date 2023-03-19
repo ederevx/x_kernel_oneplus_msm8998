@@ -14,6 +14,9 @@
 /* Keep track of interactivity */
 DEFINE_LW_TIMEOUT(sched_interactive_lwt, SCHED_INTERACTIVE_INPUT_NS);
 
+/* Allow certain conditions to bypass sched_interactive timeout */
+atomic_t sched_interactive_hold_cnt = ATOMIC_INIT(0);
+
 static void sched_interactive_event(struct input_handle *handle,
 		unsigned int type, unsigned int code, int value)
 {
