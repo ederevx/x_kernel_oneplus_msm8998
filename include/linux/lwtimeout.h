@@ -1,58 +1,43 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Lightweight Timeout
- * Copyright (C) 2021 ederekun <sedrickvince@gmail.com>.
+ * Copyright (C) 2023 ederekun <sedrickvince@gmail.com>.
  */
 
 #ifndef _LINUX_LWTIMEOUT_H
 #define _LINUX_LWTIMEOUT_H
 
 struct lwtimeout {
-	atomic_t soft_lock;
+	atomic_t update_cnt;
 	u64 ts;
 	bool expired;
 	const u64 duration;
 };
 
 /**
- * lwtimeout_update - disable timeout updates by acquiring a soft lock
- * @lwt: timeout to be modified
- */
-static inline void lwtimeout_lock(struct lwtimeout *lwt)
-{
-	atomic_inc(&lwt->soft_lock);
-}
-
-/**
- * lwtimeout_update - retrieve locks to re-enable timeout updates
- * @lwt: timeout to be modified
- */
-static inline void lwtimeout_unlock(struct lwtimeout *lwt)
-{
-	if (likely(atomic_read(&lwt->soft_lock) > 0))
-		atomic_dec(&lwt->soft_lock);
-}
-
-/**
- * lwtimeout_check_timeout - check if the timeout had occured
+ * lwtimeout_check_timeout - check the expired boolean for timeout
  * @lwt: timeout to be evaluated
  */
 static inline bool lwtimeout_check_timeout(struct lwtimeout *lwt) 
 {
-	bool expired = READ_ONCE(lwt->expired);
+	return READ_ONCE(lwt->expired);
+}
 
-	if (!expired) {
-		/* Enforce soft lock while also making the update single-threaded */
-		if (atomic_inc_return(&lwt->soft_lock) == 1) {
-			if (ktime_get_ns() > READ_ONCE(lwt->ts) + lwt->duration) {
-				WRITE_ONCE(lwt->expired, true);
-				expired = true;
-			}
-		}
-		atomic_dec(&lwt->soft_lock);
+/**
+ * lwtimeout_update_timeout - update expired boolean if timestamp had expired
+ * @lwt: timeout to be modified
+ */
+static inline void lwtimeout_update_timeout(struct lwtimeout *lwt)
+{
+	if (READ_ONCE(lwt->expired))
+		return;
+
+	/* Limit the timestamp access, avoid concurrency as much as possible */
+	if (atomic_inc_return(&lwt->update_cnt) == 1) {
+		if (ktime_get_ns() > READ_ONCE(lwt->ts) + lwt->duration)
+			WRITE_ONCE(lwt->expired, true);
 	}
-
-	return expired;
+	atomic_dec(&lwt->update_cnt);
 }
 
 /**
@@ -64,12 +49,12 @@ static inline void lwtimeout_update_ts(struct lwtimeout *lwt)
 	bool expired = READ_ONCE(lwt->expired);
 	u64 ts_new = ktime_get_ns();
 
-	atomic_inc(&lwt->soft_lock);
+	atomic_inc(&lwt->update_cnt);
 	if (expired || ts_new > READ_ONCE(lwt->ts))
 		WRITE_ONCE(lwt->ts, ts_new);
 	if (expired)
 		WRITE_ONCE(lwt->expired, false);
-	atomic_dec(&lwt->soft_lock);
+	atomic_dec(&lwt->update_cnt);
 }
 
 /**
@@ -79,7 +64,7 @@ static inline void lwtimeout_update_ts(struct lwtimeout *lwt)
  */
 #define DEFINE_LW_TIMEOUT(_name, _expires)		\
 	struct lwtimeout _name = {							\
-		.soft_lock = ATOMIC_INIT(0),			\
+		.update_cnt = ATOMIC_INIT(0),			\
 		.ts = _expires,						\
 		.expired = false,									\
 		.duration = _expires							\
