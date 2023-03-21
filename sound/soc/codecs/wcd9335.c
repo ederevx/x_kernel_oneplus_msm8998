@@ -3711,7 +3711,8 @@ static int tasha_set_compander(struct snd_kcontrol *kcontrol,
 	struct tasha_priv *tasha = snd_soc_codec_get_drvdata(codec);
 	int comp = ((struct soc_multi_mixer_control *)
 		    kcontrol->private_value)->shift;
-	int value = ucontrol->value.integer.value[0];
+	/* Disable compander */
+	int value = 0;
 
 	pr_debug("%s: Compander %d enable current %d, new %d\n",
 		 __func__, comp + 1, tasha->comp_enabled[comp], value);
@@ -7941,21 +7942,7 @@ static int tasha_rx_hph_mode_get(struct snd_kcontrol *kcontrol,
 static int tasha_rx_hph_mode_put(struct snd_kcontrol *kcontrol,
 				 struct snd_ctl_elem_value *ucontrol)
 {
-	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
-	struct tasha_priv *tasha = snd_soc_codec_get_drvdata(codec);
-	u32 mode_val;
-
-	mode_val = ucontrol->value.enumerated.item[0];
-
-	dev_dbg(codec->dev, "%s: mode: %d\n",
-		__func__, mode_val);
-
-	if (mode_val == 0) {
-		dev_warn(codec->dev, "%s:Invalid HPH Mode, default to Cls-H HiFi\n",
-			__func__);
-		mode_val = CLS_H_HIFI;
-	}
-	tasha->hph_mode = mode_val;
+	/* Always set tasha->hph_mode to CLS_H_HIFI */
 	return 0;
 }
 
@@ -8955,7 +8942,8 @@ static int tasha_config_compander(struct snd_soc_codec *codec, int interp_n,
 	dev_dbg(codec->dev, "%s: event %d compander %d, enabled %d\n",
 		__func__, event, comp + 1, tasha->comp_enabled[comp]);
 
-	if (!tasha->comp_enabled[comp])
+	/* Disable compander */
+	/* if (!tasha->comp_enabled[comp]) */
 		return 0;
 
 	comp_ctl0_reg = WCD9335_CDC_COMPANDER1_CTL0 + (comp * 8);

@@ -639,7 +639,7 @@ static SOC_ENUM_SINGLE_EXT_DECL(mi2s_tx_format, bit_format_text);
 static SOC_ENUM_SINGLE_EXT_DECL(hifi_function, hifi_text);
 
 static struct platform_device *spdev;
-static int msm_hifi_control;
+static int msm_hifi_control = MSM_HIFI_ON;
 
 static bool is_initial_boot;
 static bool codec_reg_done;
@@ -3135,14 +3135,8 @@ static int msm_hifi_get(struct snd_kcontrol *kcontrol,
 static int msm_hifi_put(struct snd_kcontrol *kcontrol,
 			struct snd_ctl_elem_value *ucontrol)
 {
-	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
-
-	pr_debug("%s() ucontrol->value.integer.value[0] = %ld\n",
-		 __func__, ucontrol->value.integer.value[0]);
-
-	msm_hifi_control = ucontrol->value.integer.value[0];
-	msm_hifi_ctrl(codec);
-
+	/* Always enable msm_hifi_control */
+	msm_hifi_ctrl(snd_soc_kcontrol_codec(kcontrol));
 	return 0;
 }
 
