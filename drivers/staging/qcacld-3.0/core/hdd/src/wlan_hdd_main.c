@@ -14221,25 +14221,6 @@ static ssize_t wlan_hdd_state_ctrl_param_write(struct file *filp,
 		goto exit;
 	}
 
-	if (!hdd_loaded) {
-		if (hdd_driver_load()) {
-			pr_err("%s: Failed to init hdd module\n", __func__);
-			goto exit;
-		}
-
-		/* 
-		 * Systems with Wi-Fi HAL which recognize HDD as module write to /dev/wlan directly 
-		 * without invoking wlan_boot sysfs. Furthermore, if it does not have the module, 
-		 * the system needs to wait for the callback to occur before it is able to write 
-		 * to /dev/wlan since it is only then the directory is initialized based 
-		 * on QCOM's unmodified non-module code.
-		 *
-		 * Thus, it is safe to deinit sysfs if the write to /dev occurs first instead
-		 * of sysfs being invoked first.
-		 */
-		wlan_deinit_sysfs();
-	}
-
 	if (!cds_is_driver_loaded() || cds_is_driver_recovering()) {
 		init_completion(&wlan_start_comp);
 		rc = wait_for_completion_timeout(&wlan_start_comp,
@@ -14501,10 +14482,16 @@ static int hdd_driver_load(void)
 
 	hdd_set_conparam(con_mode);
 
+	errno = wlan_hdd_state_ctrl_param_create();
+	if (errno) {
+		hdd_fln("Failed to create ctrl param; errno:%d", errno);
+		goto wakelock_destroy;
+	}
+
 	errno = pld_init();
 	if (errno) {
 		hdd_fln("Failed to init PLD; errno:%d", errno);
-		goto wakelock_destroy;
+		goto param_destroy;
 	}
 
 	errno = wlan_hdd_register_driver();
@@ -14523,6 +14510,8 @@ pld_deinit:
 	/* Wait for any ref taken on /dev/wlan to be released */
 	while (qdf_atomic_read(&wlan_hdd_state_fops_ref))
 		;
+param_destroy:
+	wlan_hdd_state_ctrl_param_destroy();
 wakelock_destroy:
 	qdf_wake_lock_destroy(&wlan_wake_lock);
 comp_deinit:
@@ -14585,7 +14574,6 @@ static ssize_t wlan_boot_cb(struct kobject *kobj,
 			    const char *buf,
 			    size_t count)
 {
-
 	if (wlan_loader->loaded_state || hdd_loaded) {
 		hdd_fln("wlan driver already initialized");
 		return -EALREADY;
@@ -14695,13 +14683,12 @@ static int __init hdd_module_init(void)
 {
 	int ret = -EINVAL;
 
-	ret = wlan_hdd_state_ctrl_param_create();
-	if (ret)
-		pr_err("wlan_hdd_state_create:%x\n", ret);
-
 	ret = wlan_init_sysfs();
 	if (ret)
 		hdd_fln("Failed to create sysfs entry");
+
+	if (hdd_driver_load())
+		hdd_fln("wlan driver not initialized, deferring to sysfs");
 
 	return ret;
 }
